@@ -12,8 +12,9 @@
   --ink:#0f131a; --panel:#161b25; --panel2:#1e2532; --line:#2b3344; --text:#eef1f6; --muted:#98a4b8;
   --z0:#f3f5f9; --z1:#2f7dff; --z2:#2fd07a; --z3:#ffd21f; --z4:#ff3b3b;
   --disp:"Big Shoulders Display","Barlow Condensed","Arial Narrow",Impact,sans-serif;
-  --body:"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-  /* Same face "Bring Me The Mashup" uses everywhere, incl. its screensaver */
+  /* Same face "Bring Me The Mashup" uses everywhere, incl. its screensaver —
+     now the widget's body font too, so it matches across both. */
+  --body:'Outfit',"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
   --font-mashup:'Outfit',system-ui,-apple-system,sans-serif;
 }
 *{box-sizing:border-box}
@@ -70,6 +71,8 @@ h2{font-family:var(--disp);font-weight:800;font-size:30px;margin:0 0 12px;letter
 .res img{width:84px;height:47px;object-fit:cover;border-radius:6px;background:#000}
 .res .rt{font-size:14px;font-weight:500;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .res .rc{font-size:12px;color:var(--muted);margin-top:2px}
+.res .rd{font-size:11px;color:#6d7994;margin-top:1px}
+#mashResultsHead{color:var(--muted);font-size:13px;margin:0 0 8px}
 details{margin-top:14px;background:var(--panel);border-radius:10px;padding:10px 14px}
 summary{cursor:pointer;font-weight:500}
 details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;line-height:1.55}
@@ -81,6 +84,7 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .track{display:grid;grid-template-columns:112px minmax(0,1fr) auto;gap:14px;background:var(--panel);border-radius:14px;padding:12px;align-items:start}
 .thumb{width:112px;height:63px;object-fit:cover;border-radius:8px;background:#000}
 .ttitle{font-weight:700;line-height:1.25;margin-bottom:6px}
+.tmash{font-size:13px;color:var(--muted);margin:-4px 0 8px;line-height:1.4}
 .tmeta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:14px;margin-bottom:8px}
 .bpmbox{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:2px 8px;color:var(--text)}
 .bpmbox.guess{border-style:dashed;border-color:#8a7a3a}
@@ -146,8 +150,10 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
 #mashupMeta{position:absolute;left:6%;bottom:12%;z-index:3;pointer-events:none;color:#fff}
 #mashupMeta b{display:block;font-size:clamp(26px,5vw,54px);font-weight:800;letter-spacing:-.02em;text-shadow:0 4px 30px rgba(0,0,0,.55)}
 #mashupMeta span{font-size:clamp(13px,2vw,18px);color:rgba(255,255,255,.85);text-shadow:0 2px 16px rgba(0,0,0,.6)}
-.tabs{display:flex;gap:8px;margin-bottom:10px}
-.tabs .btn{padding:7px 12px;font-size:14px}
+.tabs{display:inline-flex;gap:2px;margin-bottom:10px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:3px}
+.tabs .btn{padding:7px 14px;font-size:14px;border:0;background:transparent;color:var(--muted);border-radius:8px;font-weight:600}
+.tabs .btn.primary{background:var(--panel2);color:var(--text);box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
+.tabs .btn:hover{color:var(--text)}
 #panel{display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:var(--panel);border-left:1px solid var(--line);min-height:0;overflow:hidden}
 .np .nt{font-weight:700;font-size:clamp(15px,2.3vh,24px);line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .np .nm{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:clamp(12px,1.7vh,16px);margin-top:3px;font-variant-numeric:tabular-nums}
@@ -218,7 +224,7 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
       <h2>Find songs</h2>
       <div class="tabs">
         <button class="btn primary" id="modeYT" type="button">YouTube</button>
-        <button class="btn" id="modeMash" type="button">My Mashups</button>
+        <button class="btn" id="modeMash" type="button">bringmethemashup</button>
       </div>
       <div class="row">
         <input id="q" type="search" placeholder="Song, artist, or mashup" aria-label="Search">
@@ -944,30 +950,54 @@ function setFindMode(mode){
   $('#modeMash').classList.toggle('primary', mode==='mashup');
   $('#q').placeholder = mode==='youtube' ? 'Song, artist, or mashup' : 'Search your mashup library';
   $('#settings').hidden = mode==='mashup';
-  $('#results').innerHTML = '';
+  if(mode==='mashup' && !$('#q').value.trim()) showMashupRecent();
+  else $('#results').innerHTML = '';
 }
 $('#modeYT').onclick = ()=>setFindMode('youtube');
 $('#modeMash').onclick = ()=>setFindMode('mashup');
 
+function mashupDateStr(entry){
+  const d = entry.dateAdded ? new Date(entry.dateAdded) : null;
+  if(!d || isNaN(d)) return '';
+  return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year: d.getFullYear()===new Date().getFullYear()?undefined:'numeric'});
+}
 let lastMashResults = [];
-async function doSearchMashup(){
-  const q = $('#q').value.trim(); const box = $('#results');
-  if(!q) return;
-  box.innerHTML = '<p class="note">Searching your library...</p>';
+function renderMashupResults(list, headNote){
+  const box = $('#results');
+  lastMashResults = list;
+  if(!list.length){ box.innerHTML = '<p class="note">No mashups matched. Try an artist or song name.</p>'; return; }
+  const head = headNote ? `<p id="mashResultsHead">${esc(headNote)}</p>` : '';
+  box.innerHTML = head + list.map((e,i)=>{
+    const label = mashupLabelShort(e);
+    const date = mashupDateStr(e);
+    const thumbSrc = (e.video && e.video.sourceId) ? ('https://i.ytimg.com/vi/'+e.video.sourceId+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
+    return `<div class="res"><img src="${esc(thumbSrc)}" alt="" loading="lazy"><div><div class="rt">${esc(e.displayTitle||label)}</div><div class="rc">${esc(label)}</div>${date?`<div class="rd">Uploaded ${esc(date)}</div>`:''}</div><button class="btn" data-addmash="${i}">Add</button></div>`;
+  }).join('');
+}
+async function showMashupRecent(){
+  const box = $('#results');
+  box.innerHTML = '<p class="note">Loading your recent mashups...</p>';
   try{
     const catalog = await loadMashupCatalog();
-    const hits = searchMashups(catalog,q);
-    lastMashResults = hits;
-    if(!hits.length){ box.innerHTML = '<p class="note">No mashups matched. Try an artist or song name.</p>'; return; }
-    box.innerHTML = hits.map((e,i)=>{
-      const label = mashupLabel(e);
-      const thumbSrc = (e.video && e.video.sourceId) ? ('https://i.ytimg.com/vi/'+e.video.sourceId+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
-      return `<div class="res"><img src="${esc(thumbSrc)}" alt="" loading="lazy"><div><div class="rt">${esc(e.displayTitle||label)}</div><div class="rc">${esc(label)}</div></div><button class="btn" data-addmash="${i}">Add</button></div>`;
-    }).join('');
+    if(findMode!=='mashup' || $('#q').value.trim()) return; // user moved on while this was loading
+    renderMashupResults(catalog.slice(0,40), 'Most recent mashups');
   }catch(e){
     box.innerHTML = '<p class="note err">'+esc(e.message)+'</p>';
   }
 }
+async function doSearchMashup(){
+  const q = $('#q').value.trim(); const box = $('#results');
+  if(!q) return showMashupRecent();
+  box.innerHTML = '<p class="note">Searching your library...</p>';
+  try{
+    const catalog = await loadMashupCatalog();
+    const hits = searchMashups(catalog,q);
+    renderMashupResults(hits);
+  }catch(e){
+    box.innerHTML = '<p class="note err">'+esc(e.message)+'</p>';
+  }
+}
+$('#q').addEventListener('input', ()=>{ if(findMode==='mashup' && !$('#q').value.trim()) showMashupRecent(); });
 
 let lastResults = [];
 async function doSearch(){
@@ -1027,6 +1057,7 @@ function trackHTML(t,i){
     <img class="thumb" src="${esc(t.thumb)}" alt="" loading="lazy">
     <div class="tmain">
       <div class="ttitle">${esc(t.title)}</div>
+      ${t.kind==='mashup' && t.mashupEntry ? `<div class="tmash">${esc(mashupLabelShort(t.mashupEntry))}</div>` : ''}
       <div class="tmeta">
         <span>${fmt(t.dur)}</span><span>${esc(t.genre)}</span>
         <label class="bpmbox ${t.bpmSrc==='guess'?'guess':''}" title="${tip}"><input class="bpm" type="number" min="60" max="200" value="${t.bpm}" data-act="bpm" aria-label="BPM for ${esc(t.title)}"> BPM</label>
