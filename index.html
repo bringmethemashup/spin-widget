@@ -965,7 +965,6 @@ function createSharedPlayer(videoId){
 async function startClass(from){
   const ts = tracks(); if(!ts.length) return;
   showRide();
-  await loadYT();
   cur = clamp(from||0,0,ts.length-1); ended = false;
   await goToCurrent();
 }
@@ -985,6 +984,7 @@ async function goToCurrent(){
   } else {
     if(mashupAudio) mashupAudio.pause();
     $('#mashupViz').hidden = true; $('#yt').hidden = false; $('#cVidToggle').hidden = true;
+    await loadYT();
     if(!player) createSharedPlayer(t.id);
     else { ytOK = true; player.loadVideoById({videoId:t.id,startSeconds:0}); }
   }
