@@ -6,13 +6,15 @@
 <title>Spin Widget</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=DM+Sans:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
   --ink:#0f131a; --panel:#161b25; --panel2:#1e2532; --line:#2b3344; --text:#eef1f6; --muted:#98a4b8;
   --z0:#f3f5f9; --z1:#2f7dff; --z2:#2fd07a; --z3:#ffd21f; --z4:#ff3b3b;
   --disp:"Big Shoulders Display","Barlow Condensed","Arial Narrow",Impact,sans-serif;
   --body:"DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  /* Same face "Bring Me The Mashup" uses everywhere, incl. its screensaver */
+  --font-mashup:'Outfit',system-ui,-apple-system,sans-serif;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--ink);color:var(--text);font-family:var(--body);-webkit-font-smoothing:antialiased}
@@ -92,7 +94,29 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
 #ride::after{content:"";position:absolute;inset:0;border:6px solid var(--zone);pointer-events:none;transition:border-color .25s}
 #stage{position:relative;background:#000;min-width:0}
 #stage iframe,#stage #yt{position:absolute;inset:0;width:100%;height:100%;border:0}
-#mashupViz{position:absolute;inset:0;width:100%;height:100%;background:#000}
+/* ---- mashup screensaver: exact port of Bring Me The Mashup's Zune-HD-style
+   idle screen — a crossfading montage of the mashup's own artists (real
+   photos pulled live, same as the site) behind big mixed-type crawling text
+   naming every artist + song in it. Runs continuously here since it IS the
+   "no video" view, not an idle fallback. ---- */
+#mashupSaver{position:absolute;inset:0;width:100%;height:100%;background:#000;overflow:hidden;font-family:var(--font-mashup)}
+#mashupArt{position:absolute;inset:0;overflow:hidden;opacity:0;transition:opacity 1.2s var(--ease,ease)}
+#mashupArt.on{opacity:1}
+#mashupArt .slide{position:absolute;inset:0;opacity:0;transition:opacity 2.2s var(--ease,ease)}
+#mashupArt .slide.live{opacity:1}
+#mashupArt .slide .blur,#mashupArt .slide .pic{position:absolute;inset:0;background-repeat:no-repeat}
+#mashupArt .slide .blur{background-size:cover;background-position:center 22%;filter:blur(46px) saturate(1.15) brightness(.72);transform:scale(1.18)}
+#mashupArt .slide .pic{background-size:auto 100%;background-position:center;animation:mashupKenburns var(--kd,26s) ease-in-out infinite alternate}
+@keyframes mashupKenburns{from{transform:scale(1)}to{transform:scale(1.06)}}
+#mashupArt::after{content:"";position:absolute;inset:0;background:#000;opacity:.68;pointer-events:none}
+#mashupCrawl{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:2}
+#mashupCrawl .cline{position:absolute;left:0;white-space:nowrap;color:#fff;line-height:.92;will-change:transform;text-shadow:0 2px 24px rgba(0,0,0,.45)}
+#mashupCrawl .cline.ctime{font-variant-numeric:tabular-nums}
+@keyframes mashupCrawlR{from{transform:translateX(-100%)}to{transform:translateX(100vw)}}
+@keyframes mashupCrawlL{from{transform:translateX(100vw)}to{transform:translateX(-100%)}}
+#mashupMeta{position:absolute;left:6%;bottom:12%;z-index:3;pointer-events:none;color:#fff}
+#mashupMeta b{display:block;font-size:clamp(26px,5vw,54px);font-weight:800;letter-spacing:-.02em;text-shadow:0 4px 30px rgba(0,0,0,.55)}
+#mashupMeta span{font-size:clamp(13px,2vw,18px);color:rgba(255,255,255,.85);text-shadow:0 2px 16px rgba(0,0,0,.6)}
 .tabs{display:flex;gap:8px;margin-bottom:10px}
 .tabs .btn{padding:7px 12px;font-size:14px}
 #panel{display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:var(--panel);border-left:1px solid var(--line);min-height:0;overflow:hidden}
@@ -189,7 +213,11 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
 
 <!-- ============ RIDE VIEW ============ -->
 <section id="ride" hidden>
-  <div id="stage"><div id="yt"></div><canvas id="mashupViz" hidden></canvas></div>
+  <div id="stage"><div id="yt"></div><div id="mashupSaver" hidden>
+    <div id="mashupArt"></div>
+    <div id="mashupCrawl"></div>
+    <div id="mashupMeta"><b id="mashupMetaTitle"></b><span id="mashupMetaArtist"></span></div>
+  </div></div>
   <aside id="panel" aria-label="Workout guide">
     <div class="np">
       <div class="nt" id="npTitle"></div>
@@ -547,63 +575,195 @@ async function resolvePcloudUrl(publicLink, force){
 }
 function invalidatePcloud(publicLink){ const code = pcloudExtractCode(publicLink); if(code && pcloudCache[code]){ delete pcloudCache[code]; pcloudPersist(); } }
 
-// ---------- audio-reactive visualizer (ported/trimmed from Bring Me The Mashup: js/visualizer.js) ----------
-const Viz = (()=>{
-  let analyser=null, freq=null, ambient=true, playing=false, canvas=null, ctx=null, raf=0, t0=performance.now();
-  let zoneColor='#2f7dff', zoneColor2='#ff3b3b';
-  const P=[]; const PCOUNT=42;
-  function setAnalyser(a){ analyser=a; ambient=!a; if(a) freq=new Uint8Array(a.frequencyBinCount); }
-  function setPlaying(v){ playing=v; }
-  function setAmbient(v){ ambient = v || !analyser; }
-  function setZoneColors(c1,c2){ zoneColor=c1; zoneColor2=c2||c1; }
-  function sample(i,n,time){
-    if(!ambient && analyser){ const idx=Math.floor(Math.pow(i/n,1.6)*(freq.length*0.72)); return freq[idx]/255; }
-    const sp = playing?1:0.35; const x=i/n;
-    return 0.22+0.16*Math.sin(time*0.0012*sp+x*5.1)+0.12*Math.sin(time*0.0021*sp+x*11.7+2)+0.07*Math.sin(time*0.0034*sp+x*23.3+4);
+// ---------- mashup screensaver: artist artwork (ported from Bring Me The Mashup: js/artwork.js) ----------
+// Real artist photos, no API key: Deezer search first (actual photos),
+// iTunes album art as fallback. JSONP so CORS never applies. Cached in
+// localStorage exactly like the site (30d hits / 7d misses) so repeat plays
+// are instant and we stay well under Deezer's public rate limit.
+const ArtworkArt = (()=>{
+  const KEY = 'spinwidget:art:v1';
+  let cache = {}; try{ cache = JSON.parse(localStorage.getItem(KEY)||'{}')||{}; }catch(e){ cache={}; }
+  const persist = ()=>{ try{ localStorage.setItem(KEY, JSON.stringify(cache)); }catch(e){} };
+  const norm = s => (s||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();
+  const loose = s => norm(s).replace(/[^a-z0-9]/g,'');
+  const HIT_MS = 30*864e5, MISS_MS = 7*864e5;
+  const BLANK_ART = 'd41d8cd98f00b204e9800998ecf8427e';
+  function nameScore(want,got){
+    const a=(want||'').toLowerCase().trim(), b=(got||'').toLowerCase().trim();
+    if(!a||!b) return 0; if(a===b) return 3; if(norm(a)===norm(b)) return 2; if(loose(a)===loose(b)) return 1; return 0;
   }
-  function ensureParticles(w,h){ while(P.length<PCOUNT) P.push({x:Math.random()*w,y:Math.random()*h,r:1+Math.random()*2.5,vx:(Math.random()-.5)*.3,vy:-0.2-Math.random()*.5,a:Math.random()}); }
-  function attach(c){ canvas=c; ctx=c.getContext('2d'); if(!raf) raf=requestAnimationFrame(loop); }
-  function loop(now){
-    raf = requestAnimationFrame(loop);
-    if(!ambient && analyser){ analyser.getByteFrequencyData(freq); }
-    if(!canvas || !canvas.isConnected || canvas.hidden){ return; }
-    const dpr = Math.min(window.devicePixelRatio||1,2);
-    const W = canvas.clientWidth*dpr, H = canvas.clientHeight*dpr;
-    if(canvas.width!==W || canvas.height!==H){ canvas.width=W; canvas.height=H; }
-    if(!W||!H) return;
-    ctx.clearRect(0,0,W,H);
-    ensureParticles(W,H);
-    const grad = ctx.createLinearGradient(0,0,W,0);
-    grad.addColorStop(0,zoneColor); grad.addColorStop(1,zoneColor2);
-    const time = now-t0;
-    const N=96, base=H*0.68;
-    for(let layer=2; layer>=0; layer--){
-      const amp=H*(0.42-layer*0.10);
-      const alpha = layer===0?0.9:(layer===1?0.35:0.16);
-      const off = layer*40;
-      ctx.beginPath(); ctx.moveTo(0,base);
-      for(let i=0;i<=N;i++){
-        const x=(i/N)*W; const e=sample(i,N,time+off); const y=base-Math.pow(e,1.35)*amp;
-        if(i===0) ctx.lineTo(x,y); else { const px=((i-1)/N)*W; ctx.quadraticCurveTo(px+(x-px)/2,y,x,y); }
+  const deezerPic = a => { const u = a && (a.picture_xl||a.picture_big); return u && !u.includes(BLANK_ART) ? u : null; };
+  let cbSeq = 0;
+  function jsonp(url, timeout){
+    return new Promise((resolve,reject)=>{
+      const cb = '__spinArt'+(++cbSeq);
+      const s = document.createElement('script');
+      const t = setTimeout(()=>{ cleanup(); reject(new Error('jsonp timeout')); }, timeout||8000);
+      function cleanup(){ clearTimeout(t); try{ delete window[cb]; }catch(e){} s.remove(); }
+      window[cb] = data => { cleanup(); resolve(data); };
+      s.onerror = () => { cleanup(); reject(new Error('jsonp failed')); };
+      s.src = url.replace('{cb}', cb);
+      document.head.appendChild(s);
+    });
+  }
+  const sleep = ms => new Promise(r=>setTimeout(r,ms));
+  const LANES = 2; const lanes = Array.from({length:LANES},()=>Promise.resolve()); let nextLane = 0;
+  function throttled(fn){
+    const i = nextLane; nextLane = (nextLane+1)%LANES;
+    const run = lanes[i].then(fn, fn);
+    lanes[i] = run.then(()=>{}, ()=>{});
+    return run;
+  }
+  async function deezerSearch(name, tries){
+    tries = tries||3;
+    const url = 'https://api.deezer.com/search/artist?q='+encodeURIComponent(name)+'&limit=10&output=jsonp&callback={cb}';
+    for(let i=0;i<tries;i++){
+      const d = await throttled(()=>jsonp(url).catch(()=>null));
+      if(d && !d.error && Array.isArray(d.data)) return d.data;
+      await sleep(500*(i+1)+Math.random()*400);
+    }
+    return null;
+  }
+  async function fromDeezer(name){
+    const data = await deezerSearch(name);
+    if(!data) return {answered:false,url:null};
+    const list = data.filter(deezerPic);
+    if(!list.length) return {answered:true,url:null};
+    const matches = list.map(a=>({a,s:nameScore(name,a.name)})).filter(x=>x.s>0);
+    matches.sort((x,y)=> y.s-x.s || (y.a.nb_fan||0)-(x.a.nb_fan||0));
+    return {answered:true, url: deezerPic(matches.length?matches[0].a:list[0])};
+  }
+  async function fromITunes(name){
+    const d = await jsonp('https://itunes.apple.com/search?term='+encodeURIComponent(name)+'&entity=album&attribute=artistTerm&limit=10&callback={cb}');
+    const list = (d && d.results) || [];
+    const r = list.find(x=>nameScore(name,x.artistName)>0) || list[0];
+    return r && r.artworkUrl100 ? r.artworkUrl100.replace('100x100','600x600') : null;
+  }
+  const live = k => { const c = cache[k]; return c && c.e>Date.now() ? c : null; };
+  function record(k, field, url){ const c = live(k)||{}; cache[k] = Object.assign({}, c, {[field]:url, e: Date.now()+(url?HIT_MS:MISS_MS)}); persist(); }
+  async function artistPhoto(name){
+    const k = norm(name); if(!k) return null;
+    const c = live(k); if(c && 'd' in c) return c.d;
+    const r = await fromDeezer(name); if(!r.answered) return null;
+    record(k,'d',r.url); return r.url;
+  }
+  async function albumCover(name){
+    const k = norm(name); if(!k) return null;
+    const c = live(k); if(c && 'i' in c) return c.i;
+    let url = null; try{ url = await fromITunes(name); }catch(e){ return null; }
+    record(k,'i',url); return url;
+  }
+  function artistsOf(entry){
+    const seen = new Set(), out = [];
+    for(const s of (entry.sourceSongs||[])){
+      for(const part of (s.artist||'').split(';')){
+        const name = part.trim(); const k = norm(name);
+        if(!k || seen.has(k)) continue;
+        seen.add(k); out.push(name);
+        if(out.length>=14) return out;
       }
-      ctx.lineTo(W,base); ctx.closePath();
-      ctx.globalAlpha=alpha; ctx.fillStyle=grad; ctx.fill();
-      ctx.save(); ctx.translate(0,base*2); ctx.scale(1,-0.35); ctx.globalAlpha=alpha*0.35; ctx.fill(); ctx.restore();
     }
-    ctx.globalAlpha=1;
-    let energy=0; const EN=24;
-    for(let i=0;i<EN;i++) energy+=sample(i,EN,time);
-    energy/=EN;
-    ctx.fillStyle='rgba(255,255,255,.55)';
-    for(const p of P){
-      p.x+=p.vx*(1+energy*2); p.y+=p.vy*(0.5+energy*3.2); p.a-=0.0025;
-      if(p.y<-10||p.a<=0){ p.x=Math.random()*W; p.y=H*(0.6+Math.random()*0.4); p.a=0.5+Math.random()*0.5; }
-      ctx.globalAlpha=p.a*(0.25+energy*0.75);
-      ctx.beginPath(); ctx.arc(p.x,p.y,p.r*dpr,0,7); ctx.fill();
-    }
-    ctx.globalAlpha=1;
+    return out;
   }
-  return {setAnalyser,setPlaying,setAmbient,setZoneColors,attach};
+  async function collageFor(entry){
+    const names = artistsOf(entry); if(!names.length) return [];
+    const photos = (await Promise.all(names.map(n=>artistPhoto(n)))).filter(Boolean);
+    if(photos.length) return photos;
+    const covers = await Promise.all(names.map(n=>albumCover(n)));
+    return covers.filter(Boolean);
+  }
+  return {collageFor, artistsOf};
+})();
+
+// ---------- mashup screensaver: Zune-HD-style crawl (ported from Bring Me The Mashup: js/app.js) ----------
+const MashupSaver = (()=>{
+  const CRAWL_STYLES = [
+    'font-weight:900;letter-spacing:-.03em;text-transform:uppercase',
+    'font-weight:200;letter-spacing:.28em;text-transform:uppercase',
+    'font-weight:800;letter-spacing:-.01em',
+    'font-weight:700;scale:.66 1;text-transform:uppercase',
+    'font-weight:600;scale:1.32 1;letter-spacing:.04em',
+    'font-weight:300;text-transform:lowercase;letter-spacing:.12em',
+    'font-weight:500;font-style:italic;letter-spacing:.02em',
+  ];
+  const CRAWL_LANES = [2,15,28,41,54,67,80];
+  let lines = [], crawlT = 0, crawlSeq = 0, artToken = 0, montageT = 0;
+  const box = ()=>$('#mashupCrawl');
+  const artEl = ()=>$('#mashupArt');
+
+  function buildCrawl(entry){
+    const seen = new Set(), out = [];
+    const add = s => { const v=(s||'').trim(); if(!v||seen.has(v.toLowerCase())) return; seen.add(v.toLowerCase()); out.push(v); };
+    (entry.mashupArtist||'').split(';').forEach(a=>add(a.trim()));
+    (entry.sourceSongs||[]).forEach(s=>{ (s.artist||'').split(';').forEach(a=>add(a.trim())); add(s.title); });
+    add(entry.displayTitle);
+    lines = out;
+    box().innerHTML = '';
+  }
+  function timeText(){
+    const a = window.mashupAudio;
+    const d = (a && a.duration) || 0, t = (a && a.currentTime) || 0;
+    return d ? fmt(t)+' / '+fmt(d) : fmt(t);
+  }
+  function spawn(){
+    if(!lines.length) return;
+    const b = box(); if(!b) return;
+    const used = new Set([...b.children].map(c=>c.dataset.lane));
+    const free = CRAWL_LANES.filter(l=>!used.has(String(l)));
+    if(!free.length) return;
+    const lane = free[Math.floor(Math.random()*free.length)];
+    const el = document.createElement('span');
+    el.className = 'cline'; el.dataset.lane = lane;
+    if(!b.querySelector('.ctime')){ el.classList.add('ctime'); el.textContent = timeText(); }
+    else { el.textContent = lines[crawlSeq++ % lines.length]; }
+    const huge = !el.classList.contains('ctime') && Math.random()<0.3;
+    el.style.cssText = CRAWL_STYLES[Math.floor(Math.random()*CRAWL_STYLES.length)]
+      + ';top:'+lane+'%'
+      + ';font-size:'+(huge?12+Math.random()*8:5+Math.random()*7).toFixed(1)+'vmin'
+      + ';opacity:'+(0.45+Math.random()*0.5).toFixed(2)
+      + ';animation:'+(Math.random()<0.5?'mashupCrawlL':'mashupCrawlR')+' '+(16+Math.random()*16).toFixed(1)+'s linear both';
+    el.addEventListener('animationend', ()=>el.remove());
+    b.appendChild(el);
+  }
+  function startCrawl(){ stopCrawl(); spawn(); spawn(); crawlT = setInterval(spawn, 2400); }
+  function stopCrawl(){ clearInterval(crawlT); crawlT = 0; const b=box(); if(b) b.innerHTML=''; }
+
+  function applyMontage(entry){
+    const token = ++artToken;
+    const el = artEl(); if(!el) return;
+    clearInterval(montageT);
+    el.classList.remove('on');
+    ArtworkArt.collageFor(entry).then(urls=>{
+      if(token!==artToken) return;
+      if(!urls.length){ el.innerHTML=''; return; }
+      const esc1 = u => u.replace(/'/g,'%27');
+      el.innerHTML = urls.slice(0,14).map(u=>
+        '<div class="slide"><div class="blur" style="background-image:url(\''+esc1(u)+'\')"></div><div class="pic" style="background-image:url(\''+esc1(u)+'\')"></div></div>'
+      ).join('');
+      const slides = [...el.querySelectorAll('.slide')];
+      let i = 0; slides[0].classList.add('live');
+      if(slides.length>1){
+        montageT = setInterval(()=>{ slides[i].classList.remove('live'); i=(i+1)%slides.length; slides[i].classList.add('live'); }, 9000);
+      }
+      el.classList.add('on');
+    }).catch(()=>{});
+  }
+
+  function show(entry){
+    $('#mashupSaver').hidden = false;
+    $('#mashupMetaTitle').textContent = entry.displayTitle||'';
+    $('#mashupMetaArtist').textContent = entry.mashupArtist||'';
+    buildCrawl(entry);
+    startCrawl();
+    applyMontage(entry);
+  }
+  function hide(){
+    $('#mashupSaver').hidden = true;
+    stopCrawl();
+    clearInterval(montageT);
+    artToken++;
+  }
+  return {show, hide};
 })();
 
 // ---------- helpers ----------
@@ -651,9 +811,10 @@ function makeMashupTrack(entry){
   const label = mashupLabel(entry);
   const g = guessMeta((entry.displayTitle||'')+' '+label, (entry.tags||[]).join(' '));
   const thumb = (entry.video && entry.video.sourceId) ? ('https://i.ytimg.com/vi/'+entry.video.sourceId+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
-  const t = {uid:nextUid(), kind:'mashup', id:'mashup:'+entry.id, catalogId:entry.id, title:entry.displayTitle||label, channel:'Bring Me The Mashup',
+  const t = {uid:nextUid(), kind:'mashup', id:'mashup:'+entry.id, catalogId:entry.id, title:entry.displayTitle||label, channel:entry.mashupArtist||'Bring Me The Mashup',
     dur:210, durKnown:false, thumb, bpm:g.bpm, bpmSrc:g.bpmSrc, genre:g.genre, offset:0, opts:null, plan:null,
-    audioLink:(entry.audio && entry.audio.publicLink) || null, videoId:(entry.video && entry.video.sourceId) || null};
+    audioLink:(entry.audio && entry.audio.publicLink) || null, videoId:(entry.video && entry.video.sourceId) || null,
+    mashupEntry:entry};
   const o = quickPick(t,'balanced',0);
   t.opts = o; t.plan = buildPlan(t,o);
   return t;
@@ -924,10 +1085,15 @@ $('#fApply').onclick = ()=>{
 };
 
 // ---------- mashup audio playback (ported/trimmed from Bring Me The Mashup: js/player.js) ----------
-let mashupAudio = null, mashupActx = null, mashupAnalyserOk = false, mashupCorsBlocked = false, videoMode = false;
+// No Web Audio analyser needed anymore — the screensaver is the ported
+// artist-montage + crawl (not audio-reactive canvas art), so playback is a
+// plain <audio> element with no crossOrigin/CORS requirement.
+let mashupAudio = null, videoMode = false;
+window.mashupAudio = null; // exposed for MashupSaver's live timestamp line
 function ensureMashupAudio(){
   if(mashupAudio) return mashupAudio;
   mashupAudio = new Audio();
+  window.mashupAudio = mashupAudio;
   mashupAudio.preload = 'metadata';
   mashupAudio.addEventListener('loadedmetadata', ()=>{
     const t = tracks()[cur];
@@ -940,19 +1106,9 @@ function ensureMashupAudio(){
     const t = tracks()[cur];
     if(t && t.kind==='mashup' && t.audioLink) invalidatePcloud(t.audioLink);
   });
-  mashupAudio.addEventListener('play', ()=>{ Viz.setPlaying(true); syncPlayBtn(1); });
-  mashupAudio.addEventListener('pause', ()=>{ Viz.setPlaying(false); syncPlayBtn(2); });
+  mashupAudio.addEventListener('play', ()=>{ syncPlayBtn(1); });
+  mashupAudio.addEventListener('pause', ()=>{ syncPlayBtn(2); });
   return mashupAudio;
-}
-function ensureMashupGraph(){
-  if(mashupAnalyserOk || mashupCorsBlocked) return;
-  try{
-    mashupActx = mashupActx || new (window.AudioContext||window.webkitAudioContext)();
-    const src = mashupActx.createMediaElementSource(mashupAudio);
-    const an = mashupActx.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0.82;
-    src.connect(an); an.connect(mashupActx.destination);
-    Viz.setAnalyser(an); mashupAnalyserOk = true;
-  }catch(e){ Viz.setAnalyser(null); }
 }
 async function playMashupAudio(t, retried){
   const a = ensureMashupAudio();
@@ -960,15 +1116,10 @@ async function playMashupAudio(t, retried){
   try{
     const url = await resolvePcloudUrl(t.audioLink, !!retried);
     if(tracks()[cur]!==t) return;
-    if(!mashupCorsBlocked) a.crossOrigin = 'anonymous'; else a.removeAttribute('crossorigin');
     a.src = url;
     await a.play();
-    if(mashupActx && mashupActx.state==='suspended') mashupActx.resume();
-    ensureMashupGraph();
-    Viz.setAmbient(!mashupAnalyserOk);
   }catch(err){
     if(!retried){ invalidatePcloud(t.audioLink); return playMashupAudio(t, true); }
-    if(!mashupCorsBlocked){ mashupCorsBlocked = true; Viz.setAnalyser(null); Viz.setAmbient(true); return playMashupAudio(t, true); }
     toast('Could not play this mashup’s audio.');
   }
 }
@@ -1019,13 +1170,13 @@ async function goToCurrent(){
 
   if(t.kind==='mashup'){
     if(player){ try{ player.pauseVideo(); }catch(e){} }
-    $('#yt').hidden = true; $('#mashupViz').hidden = false;
+    $('#yt').hidden = true;
     $('#cVidToggle').hidden = !t.videoId; $('#cVidToggle').textContent = 'Show video';
-    Viz.attach($('#mashupViz')); Viz.setPlaying(false);
+    MashupSaver.show(t.mashupEntry || {displayTitle:t.title, mashupArtist:t.channel});
     await playMashupAudio(t);
   } else {
     if(mashupAudio) mashupAudio.pause();
-    $('#mashupViz').hidden = true; $('#yt').hidden = false; $('#cVidToggle').hidden = true;
+    MashupSaver.hide(); $('#yt').hidden = false; $('#cVidToggle').hidden = true;
     await loadYT();
     if(!player) createSharedPlayer(t.id);
     else { ytOK = true; player.loadVideoById({videoId:t.id,startSeconds:0}); }
@@ -1097,7 +1248,6 @@ function frame(){
       setText('zoneName',z.name); setText('zoneLabel',seg.label+(seg.cue?': '+seg.cue:''));
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
       hwInner.querySelectorAll('.hwseg').forEach((el,i)=>el.classList.toggle('past',i<idx));
-      Viz.setZoneColors(z.color, next?ZONES[next.z].color:z.color);
       lastIdx = idx;
     }
     setText('timer', store.countUp ? fmtUp(elapsed) : fmtDown(remain));
@@ -1147,17 +1297,17 @@ $('#cVidToggle').onclick = async ()=>{
   videoMode = !videoMode;
   if(videoMode){
     if(mashupAudio) mashupAudio.pause();
-    $('#mashupViz').hidden = true; $('#yt').hidden = false;
-    $('#cVidToggle').textContent = 'Back to visualizer';
+    MashupSaver.hide(); $('#yt').hidden = false;
+    $('#cVidToggle').textContent = 'Back to screensaver';
     await loadYT();
     const startAt = mashupAudio ? mashupAudio.currentTime||0 : 0;
     if(!player) createSharedPlayer(t.videoId);
     else player.loadVideoById({videoId:t.videoId,startSeconds:startAt});
   } else {
     try{ player && player.pauseVideo(); }catch(e){}
-    $('#yt').hidden = true; $('#mashupViz').hidden = false;
+    $('#yt').hidden = true;
     $('#cVidToggle').textContent = 'Show video';
-    Viz.attach($('#mashupViz'));
+    MashupSaver.show(t.mashupEntry || {displayTitle:t.title, mashupArtist:t.channel});
     if(mashupAudio) mashupAudio.play().catch(()=>{});
   }
 };
