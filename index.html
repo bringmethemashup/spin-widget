@@ -454,28 +454,70 @@ function effort(segs){
 /*PLAN_END*/
 
 // ---------- mashup catalog (Bring Me The Mashup) ----------
-const MASHUP_CATALOG_URL = 'https://bringmethemashup.github.io/new-mashup-site/data/catalog.json';
+// The mashup site now runs on Supabase (backend.js is its source of truth;
+// catalog.json is just its offline fallback and goes stale the moment a new
+// track is added). We read the SAME public 'tracks' table directly via the
+// Supabase REST API, using the site's own anon key (safe to publish — RLS
+// only exposes approved tracks to anonymous reads, same as the live site).
+// If Supabase is unreachable for any reason we fall back to catalog.json so
+// the widget never goes fully dark.
+const MASHUP_SUPABASE_URL = 'https://txkmwsnvtwobhrdrablw.supabase.co';
+const MASHUP_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4a213c252dHdvYmhyZHJhYmx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwOTY0MjQsImV4cCI6MjA5ODY3MjQyNH0.S4gQFyfNUhcUbIh5vBaNEj3VxQONTYcuc9VaSCxN74c';
+const MASHUP_CATALOG_FALLBACK_URL = 'https://bringmethemashup.github.io/new-mashup-site/data/catalog.json';
 const MASHUP_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="112" height="63"><rect width="112" height="63" fill="#1e2532"/><circle cx="30" cy="31" r="14" fill="#2f7dff"/><circle cx="60" cy="31" r="14" fill="#2fd07a" opacity="0.8"/><circle cx="90" cy="31" r="14" fill="#ff3b3b" opacity="0.6"/></svg>'
 );
 let mashupCatalog = null, mashupCatalogPromise = null;
+async function fetchMashupTracksFromSupabase(){
+  const out = [];
+  const page = 1000;
+  for(let from=0; ; from+=page){
+    const url = MASHUP_SUPABASE_URL+'/rest/v1/tracks?select=id,status,data,created_at&status=eq.approved&order=created_at.desc&offset='+from+'&limit='+page;
+    const r = await fetch(url, { headers: { apikey: MASHUP_SUPABASE_ANON_KEY, Authorization: 'Bearer '+MASHUP_SUPABASE_ANON_KEY } });
+    if(!r.ok) throw new Error('Supabase tracks fetch failed: '+r.status);
+    const rows = await r.json();
+    for(const row of rows) out.push(Object.assign({}, row.data, { id: row.id, dateAdded: (row.data&&row.data.dateAdded) || row.created_at }));
+    if(rows.length < page) break;
+  }
+  return out;
+}
 function loadMashupCatalog(){
   if(mashupCatalog) return Promise.resolve(mashupCatalog);
   if(mashupCatalogPromise) return mashupCatalogPromise;
-  mashupCatalogPromise = fetch(MASHUP_CATALOG_URL).then(r=>{
-    if(!r.ok) throw new Error('Could not load your mashup library.');
-    return r.json();
-  }).then(list=>{ mashupCatalog = list.filter(e=>e.isOwnUpload && e.audio && e.audio.publicLink); return mashupCatalog; });
+  mashupCatalogPromise = fetchMashupTracksFromSupabase().catch(e=>{
+    console.warn('Falling back to static catalog.json (Supabase read failed)', e);
+    return fetch(MASHUP_CATALOG_FALLBACK_URL).then(r=>{
+      if(!r.ok) throw new Error('Could not load your mashup library.');
+      return r.json();
+    });
+  }).then(list=>{
+    mashupCatalog = list.filter(e=>e.isOwnUpload && e.audio && e.audio.publicLink);
+    mashupCatalog.sort((a,b)=> new Date(b.dateAdded||0) - new Date(a.dateAdded||0));
+    return mashupCatalog;
+  });
   return mashupCatalogPromise;
 }
 function mashupLabel(entry){
   return (entry.sourceSongs && entry.sourceSongs.length) ? entry.sourceSongs.map(s=>s.artist+' – '+s.title).join(' x ') : (entry.displayTitle||'');
 }
+// Megamashups can chain 10+ songs — show at most the first 5 on one line.
+function mashupLabelShort(entry){
+  const songs = entry.sourceSongs || [];
+  if(!songs.length) return entry.displayTitle||'';
+  const shown = songs.slice(0,5).map(s=> s.artist ? (s.artist+' – '+s.title) : s.title).join(', ');
+  return songs.length > 5 ? shown+', +'+(songs.length-5)+' more' : shown;
+}
 function searchMashups(catalog,q){
   const needle = q.trim().toLowerCase(); if(!needle) return [];
   const words = needle.split(/\s+/).filter(Boolean);
-  const hay = e => ((e.displayTitle||'')+' '+mashupLabel(e)+' '+(e.tags||[]).join(' ')+' '+(e.mashupArtist||'')).toLowerCase();
-  return catalog.filter(e=>{ const h = hay(e); return words.every(w=>h.includes(w)); }).slice(0,20);
+  // Match against title/tags/artist AND each source song's title+artist
+  // individually (fixes artist-only searches on tracks with structured
+  // sourceSongs metadata) — catalog order is already newest-first.
+  const hay = e => ([
+    e.displayTitle, mashupLabel(e), e.mashupArtist, ...(e.tags||[]),
+    ...((e.sourceSongs||[]).flatMap(s=>[s.title, s.artist]))
+  ].filter(Boolean).join(' ')).toLowerCase();
+  return catalog.filter(e=>{ const h = hay(e); return words.every(w=>h.includes(w)); }).slice(0,30);
 }
 
 // ---------- pCloud resolver (ported from Bring Me The Mashup: js/pcloud.js) ----------
