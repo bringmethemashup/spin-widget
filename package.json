@@ -1,0 +1,12 @@
+{
+  "name": "spin-widget",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Workout-guide widget for ICG Coach By Color spin classes, driven by YouTube playlists.",
+  "scripts": {
+    "test": "node tests/engine.test.js && node tests/smoke.test.js",
+    "test:engine": "node tests/engine.test.js",
+    "test:smoke": "node tests/smoke.test.js"
+  },
+  "devDependencies": { "jsdom": "^25.0.0" }
+}
