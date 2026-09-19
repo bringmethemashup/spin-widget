@@ -31,6 +31,15 @@ button,input,select{font:inherit;color:inherit}
 .mini:hover{color:var(--text);border-color:#4a5872}
 input[type=text],input[type=number],input[type=search],select{background:#0f141c;border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
 
+/* ---------- top nav ---------- */
+#topnav{max-width:1220px;margin:0 auto;padding:20px 24px 0;display:flex;gap:8px}
+#topnav .btn{padding:10px 18px}
+
+/* ---------- playlist name / save bar ---------- */
+.plnamebar{display:flex;gap:8px;align-items:center;margin:-8px 0 22px;flex-wrap:wrap}
+.plnamebar input{width:260px}
+.plnamebar .note{margin:0;font-size:13px}
+
 /* ---------- Build view ---------- */
 #build{max-width:1220px;margin:0 auto;padding:28px 24px 80px}
 .brand{display:flex;align-items:flex-end;gap:18px;flex-wrap:wrap;margin-bottom:26px}
@@ -90,7 +99,17 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#eef1f6;color:#0f131a;padding:10px 16px;border-radius:10px;font-weight:600;z-index:50;max-width:90vw}
 
 /* ---------- Ride view ---------- */
+/* ---------- Start Class (library) view ---------- */
+#library{max-width:1220px;margin:0 auto;padding:28px 24px 80px}
+#plList{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px}
+.plcard{background:var(--panel);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.plcard h3{margin:0;font-size:19px;font-weight:800}
+.plcard .plmeta{color:var(--muted);font-size:13px}
+.plcard .plbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:auto}
+
 #ride{position:fixed;inset:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,26vw,480px);background:#000;--zone:var(--z0);--zone-next:var(--z0)}
+#rideExit{position:absolute;top:14px;right:14px;z-index:20;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.3);font-size:24px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+#rideExit:hover{background:rgba(0,0,0,.8)}
 #ride::after{content:"";position:absolute;inset:0;border:6px solid var(--zone);pointer-events:none;transition:border-color .25s}
 #stage{position:relative;background:#000;min-width:0}
 #stage iframe,#stage #yt{position:absolute;inset:0;width:100%;height:100%;border:0}
@@ -155,7 +174,12 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
 </head>
 <body>
 
-<!-- ============ BUILD VIEW ============ -->
+<nav id="topnav">
+  <button class="btn primary" id="navCreator" type="button">Playlist Creator</button>
+  <button class="btn" id="navStart" type="button">Start Class</button>
+</nav>
+
+<!-- ============ BUILD VIEW (Playlist Creator) ============ -->
 <section id="build">
   <header class="brand">
     <div>
@@ -164,6 +188,13 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
     </div>
     <p>Search songs, let the widget plan the zones from tempo and length, then ride with the plan on screen.</p>
   </header>
+
+  <div class="plnamebar">
+    <input id="plName" type="text" placeholder="Untitled playlist" aria-label="Playlist name">
+    <button class="btn primary" id="btnSavePl">Save playlist</button>
+    <button class="btn" id="btnNewPl">New playlist</button>
+    <span id="plSavedNote" class="note"></span>
+  </div>
 
   <div class="cols">
     <div class="find">
@@ -211,8 +242,22 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
   </div>
 </section>
 
+<!-- ============ START CLASS VIEW (saved playlist library) ============ -->
+<section id="library" hidden>
+  <header class="brand">
+    <div>
+      <div class="brandbar" id="brandbar2"></div>
+      <h1>Start Class</h1>
+    </div>
+    <p>Pick a saved playlist to ride. Build or edit playlists in Playlist Creator.</p>
+  </header>
+  <ol id="plList"></ol>
+  <div id="plEmpty" hidden>No saved playlists yet. Build one in Playlist Creator, then hit Save playlist.</div>
+</section>
+
 <!-- ============ RIDE VIEW ============ -->
 <section id="ride" hidden>
+  <button id="rideExit" title="Exit class" aria-label="Exit class">&times;</button>
   <div id="stage"><div id="yt"></div><div id="mashupSaver" hidden>
     <div id="mashupArt"></div>
     <div id="mashupCrawl"></div>
@@ -791,13 +836,25 @@ let toastT;
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{el.hidden=true;},3600); }
 
 // ---------- state ----------
-const store = {tracks:[], apiKey:'', countUp:false, look:90};
+const store = {tracks:[], apiKey:'', countUp:true, look:90, playlists:[], currentId:null};
 function save(){ try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){} }
-function loadStore(){ try{ const s = JSON.parse(localStorage.getItem('spinwidget:v1')||'null'); if(s) Object.assign(store,s); }catch(e){} }
+function loadStore(){
+  try{
+    const s = JSON.parse(localStorage.getItem('spinwidget:v1')||'null');
+    if(s) Object.assign(store,s);
+  }catch(e){}
+  store.playlists = store.playlists || [];
+  // one-time migration: counting-up is now the default (matches what she calls out on the bike)
+  if(!store._countUpMigrated){ store.countUp = true; store._countUpMigrated = true; save(); }
+}
 loadStore();
 let uidSeq = Date.now();
 const nextUid = () => ++uidSeq;
-const tracks = () => store.tracks;
+// activeList: when riding a SAVED playlist (from Start Class), tracks() points at that
+// playlist's own array (so duration auto-corrections save back into it); when null,
+// tracks() falls back to the Creator's current draft (store.tracks) as before.
+let activeList = null, activeOrigin = 'build';
+const tracks = () => activeList || store.tracks;
 
 function makeTrack(m){
   const g = guessMeta(m.title, m.extra);
@@ -1279,7 +1336,7 @@ function frame(){
   if(ended && st===0){ setText('zoneName','Done'); setText('zoneLabel','Nice work, class.'); }
 }
 
-$('#btnStart').onclick = ()=>startClass(0);
+$('#btnStart').onclick = ()=>{ activeList = null; activeOrigin = 'build'; startClass(0); };
 $('#cPrev').onclick = ()=>{ if(cur>=0) prevTrack(); };
 $('#cNext').onclick = ()=>{ if(cur>=0 && cur<tracks().length-1) nextTrack(); };
 $('#cPlay').onclick = ()=>{
@@ -1314,12 +1371,7 @@ $('#cVidToggle').onclick = async ()=>{
 $('#cLook').onclick = ()=>{ store.look = store.look===90?150:(store.look===150?45:90); $('#cLook').textContent = 'Look ahead '+store.look+'s'; save(); layoutHighway(); };
 $('#timerMode').onclick = ()=>{ store.countUp = !store.countUp; $('#timerMode').textContent = store.countUp?'Counting up':'Counting down'; save(); };
 $('#cFull').onclick = ()=>toggleFull();
-$('#cBack').onclick = ()=>{
-  if(document.fullscreenElement) document.exitFullscreen();
-  try{ player && player.pauseVideo(); }catch(e){}
-  if(mashupAudio) mashupAudio.pause();
-  $('#ride').hidden = true; $('#build').hidden = false; renderTracks();
-};
+$('#cBack').onclick = exitRide;
 function toggleFull(){ if(document.fullscreenElement) document.exitFullscreen(); else $('#ride').requestFullscreen && $('#ride').requestFullscreen(); }
 document.addEventListener('fullscreenchange',()=>{ $('#cFull').textContent = document.fullscreenElement?'Exit full screen':'Full screen'; setTimeout(layoutHighway,120); });
 window.addEventListener('resize',()=>{ if(!$('#ride').hidden) layoutHighway(); });
@@ -1332,12 +1384,98 @@ document.addEventListener('keydown',e=>{
   else if(e.key==='t'||e.key==='T') $('#timerMode').click();
 });
 
+// ---------- saved playlists (Playlist Creator <-> Start Class) ----------
+function plId(){ return 'pl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function totalDur(list){ return (list||[]).reduce((a,t)=>a+(t.dur||0),0); }
+function showCreator(){
+  $('#build').hidden = false; $('#library').hidden = true;
+  $('#navCreator').classList.add('primary'); $('#navStart').classList.remove('primary');
+}
+function showLibrary(){
+  $('#build').hidden = true; $('#library').hidden = false;
+  $('#navCreator').classList.remove('primary'); $('#navStart').classList.add('primary');
+  renderLibrary();
+}
+function renderLibrary(){
+  const list = store.playlists.slice().sort((a,b)=>b.updatedAt-a.updatedAt);
+  $('#plEmpty').hidden = !!list.length;
+  $('#plList').innerHTML = list.map(p=>`
+    <li class="plcard">
+      <h3>${esc(p.name)}</h3>
+      <div class="plmeta">${p.tracks.length} song${p.tracks.length===1?'':'s'} &middot; ${fmt(totalDur(p.tracks))} &middot; updated ${new Date(p.updatedAt).toLocaleDateString()}</div>
+      <div class="plbtns">
+        <button class="btn primary" data-start="${p.id}">Start class</button>
+        <button class="btn" data-edit="${p.id}">Edit</button>
+        <button class="btn" data-del="${p.id}">Delete</button>
+      </div>
+    </li>`).join('');
+}
+$('#plList').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  if(b.dataset.start) startSavedPlaylist(b.dataset.start);
+  else if(b.dataset.edit) loadPlaylistIntoCreator(b.dataset.edit);
+  else if(b.dataset.del){
+    const p = store.playlists.find(x=>x.id===b.dataset.del);
+    if(p && confirm('Delete "'+p.name+'"? This can\'t be undone.')){
+      store.playlists = store.playlists.filter(x=>x.id!==b.dataset.del);
+      if(store.currentId===b.dataset.del) store.currentId = null;
+      save(); renderLibrary();
+    }
+  }
+});
+function savePlaylist(){
+  if(!store.tracks.length){ toast('Add some songs first.'); return; }
+  const name = ($('#plName').value||'').trim() || 'Untitled playlist';
+  const now = Date.now();
+  const snapshot = JSON.parse(JSON.stringify(store.tracks)); // decouple from the live draft
+  if(store.currentId){
+    const p = store.playlists.find(x=>x.id===store.currentId);
+    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; save(); $('#plName').value = name; toast('Saved "'+name+'".'); return; }
+  }
+  const p = {id:plId(), name, tracks:snapshot, createdAt:now, updatedAt:now};
+  store.playlists.push(p); store.currentId = p.id; save(); $('#plName').value = name;
+  toast('Saved "'+name+'".');
+}
+function newPlaylist(){
+  store.tracks = []; store.currentId = null; $('#plName').value = ''; save(); renderTracks();
+  toast('Started a new playlist.');
+}
+function loadPlaylistIntoCreator(id){
+  const p = store.playlists.find(x=>x.id===id); if(!p) return;
+  store.tracks = JSON.parse(JSON.stringify(p.tracks));
+  store.currentId = p.id; $('#plName').value = p.name;
+  save(); renderTracks(); showCreator();
+}
+function startSavedPlaylist(id){
+  const p = store.playlists.find(x=>x.id===id); if(!p || !p.tracks.length) return;
+  p.tracks.forEach(t=>{ if(!t.plan || !t.opts){ t.opts = quickPick(t,'balanced',0); rebuild(t); } });
+  activeList = p.tracks; activeOrigin = 'library';
+  startClass(0);
+}
+function exitRide(){
+  if(document.fullscreenElement) document.exitFullscreen();
+  try{ player && player.pauseVideo(); }catch(e){}
+  if(mashupAudio) mashupAudio.pause();
+  MashupSaver.hide();
+  $('#ride').hidden = true;
+  const cameFromLibrary = activeOrigin==='library';
+  activeList = null;
+  if(cameFromLibrary){ save(); showLibrary(); } else { showCreator(); renderTracks(); }
+}
+$('#navCreator').onclick = showCreator;
+$('#navStart').onclick = showLibrary;
+$('#btnSavePl').onclick = savePlaylist;
+$('#btnNewPl').onclick = newPlaylist;
+$('#rideExit').onclick = exitRide;
+
 // ---------- init ----------
-$('#brandbar').innerHTML = ZONES.map(z=>`<i style="background:${z.color}"></i>`).join('');
+$('#brandbar').innerHTML = $('#brandbar2').innerHTML = ZONES.map(z=>`<i style="background:${z.color}"></i>`).join('');
 $('#apiKey').value = store.apiKey || '';
 $('#cLook').textContent = 'Look ahead '+store.look+'s';
 $('#timerMode').textContent = store.countUp?'Counting up':'Counting down';
 store.tracks.forEach(t=>{ if(!t.plan || !t.opts) { t.opts = quickPick(t,'balanced',0); rebuild(t); } });
+if(store.currentId){ const p = store.playlists.find(x=>x.id===store.currentId); if(p) $('#plName').value = p.name; }
+showCreator();
 renderTracks();
 loadYT();
 })();
