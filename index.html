@@ -36,9 +36,19 @@ input[type=text],input[type=number],input[type=search],select{background:#0f141c
 #topnav .btn{padding:10px 18px}
 
 /* ---------- playlist name / save bar ---------- */
-.plnamebar{display:flex;gap:8px;align-items:center;margin:-8px 0 22px;flex-wrap:wrap}
+.plnamebar{display:flex;gap:8px;align-items:center;margin:-8px 0 22px;flex-wrap:wrap;position:relative}
 .plnamebar input{width:260px}
 .plnamebar .note{margin:0;font-size:13px}
+.loadwrap{position:relative}
+#loadPlMenu{position:absolute;top:calc(100% + 6px);left:0;z-index:30;background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:8px;min-width:280px;max-height:340px;overflow:auto;box-shadow:0 12px 28px rgba(0,0,0,.45)}
+#loadPlList{display:flex;flex-direction:column;gap:2px}
+.loadpl{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;background:transparent;border:0;border-radius:7px;padding:8px 10px;cursor:pointer;color:inherit}
+.loadpl:hover{background:var(--panel)}
+.loadpl b{font-weight:700;font-size:14px}
+.loadpl span{color:var(--muted);font-size:12px}
+#loadPlEmpty{padding:8px 10px;margin:0}
+.savednote{display:flex;align-items:center;gap:6px;color:#5ee89a;font-size:13px;font-weight:600}
+.savednote::before{content:"✓";display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:#5ee89a;color:#0f131a;font-size:11px;font-weight:900}
 
 /* ---------- Build view ---------- */
 #build{max-width:1220px;margin:0 auto;padding:28px 24px 80px}
@@ -193,7 +203,14 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
     <input id="plName" type="text" placeholder="Untitled playlist" aria-label="Playlist name">
     <button class="btn primary" id="btnSavePl">Save playlist</button>
     <button class="btn" id="btnNewPl">New playlist</button>
-    <span id="plSavedNote" class="note"></span>
+    <div class="loadwrap">
+      <button class="btn" id="btnLoadPl" aria-haspopup="true" aria-expanded="false">Load playlist ▾</button>
+      <div id="loadPlMenu" hidden>
+        <div id="loadPlList"></div>
+        <div id="loadPlEmpty" class="note" hidden>No saved playlists yet — save one first.</div>
+      </div>
+    </div>
+    <span id="plSavedNote" class="savednote" hidden></span>
   </div>
 
   <div class="cols">
@@ -1423,6 +1440,14 @@ $('#plList').addEventListener('click', e=>{
     }
   }
 });
+let savedNoteT = 0;
+function showSavedNote(text){
+  const el = $('#plSavedNote');
+  el.textContent = text; el.hidden = false;
+  clearTimeout(savedNoteT);
+  savedNoteT = setTimeout(()=>{ el.hidden = true; }, 5000);
+}
+function saveTimeStr(){ return new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
 function savePlaylist(){
   if(!store.tracks.length){ toast('Add some songs first.'); return; }
   const name = ($('#plName').value||'').trim() || 'Untitled playlist';
@@ -1430,14 +1455,15 @@ function savePlaylist(){
   const snapshot = JSON.parse(JSON.stringify(store.tracks)); // decouple from the live draft
   if(store.currentId){
     const p = store.playlists.find(x=>x.id===store.currentId);
-    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; save(); $('#plName').value = name; toast('Saved "'+name+'".'); return; }
+    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; save(); $('#plName').value = name; showSavedNote('Saved "'+name+'" at '+saveTimeStr()); toast('Saved "'+name+'".'); return; }
   }
   const p = {id:plId(), name, tracks:snapshot, createdAt:now, updatedAt:now};
   store.playlists.push(p); store.currentId = p.id; save(); $('#plName').value = name;
+  showSavedNote('Saved "'+name+'" at '+saveTimeStr());
   toast('Saved "'+name+'".');
 }
 function newPlaylist(){
-  store.tracks = []; store.currentId = null; $('#plName').value = ''; save(); renderTracks();
+  store.tracks = []; store.currentId = null; $('#plName').value = ''; $('#plSavedNote').hidden = true; save(); renderTracks();
   toast('Started a new playlist.');
 }
 function loadPlaylistIntoCreator(id){
@@ -1445,7 +1471,39 @@ function loadPlaylistIntoCreator(id){
   store.tracks = JSON.parse(JSON.stringify(p.tracks));
   store.currentId = p.id; $('#plName').value = p.name;
   save(); renderTracks(); showCreator();
+  showSavedNote('Loaded "'+p.name+'"');
+  closeLoadMenu();
 }
+function renderLoadMenu(){
+  const list = store.playlists.slice().sort((a,b)=>b.updatedAt-a.updatedAt);
+  $('#loadPlEmpty').hidden = !!list.length;
+  $('#loadPlList').innerHTML = list.map(p=>`
+    <button type="button" class="loadpl" data-load="${p.id}">
+      <b>${esc(p.name)}</b>
+      <span>${p.tracks.length} song${p.tracks.length===1?'':'s'} &middot; ${fmt(totalDur(p.tracks))} &middot; updated ${new Date(p.updatedAt).toLocaleDateString()}</span>
+    </button>`).join('');
+}
+function openLoadMenu(){
+  renderLoadMenu();
+  $('#loadPlMenu').hidden = false;
+  $('#btnLoadPl').setAttribute('aria-expanded','true');
+}
+function closeLoadMenu(){
+  $('#loadPlMenu').hidden = true;
+  $('#btnLoadPl').setAttribute('aria-expanded','false');
+}
+$('#btnLoadPl').onclick = (e)=>{
+  e.stopPropagation();
+  $('#loadPlMenu').hidden ? openLoadMenu() : closeLoadMenu();
+};
+$('#loadPlList').addEventListener('click', e=>{
+  const b = e.target.closest('[data-load]'); if(!b) return;
+  loadPlaylistIntoCreator(b.dataset.load);
+});
+document.addEventListener('click', e=>{
+  if(!$('#loadPlMenu').hidden && !e.target.closest('.loadwrap')) closeLoadMenu();
+});
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeLoadMenu(); });
 function startSavedPlaylist(id){
   const p = store.playlists.find(x=>x.id===id); if(!p || !p.tracks.length) return;
   p.tracks.forEach(t=>{ if(!t.plan || !t.opts){ t.opts = quickPick(t,'balanced',0); rebuild(t); } });
