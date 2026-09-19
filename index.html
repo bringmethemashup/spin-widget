@@ -92,6 +92,9 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
 #ride::after{content:"";position:absolute;inset:0;border:6px solid var(--zone);pointer-events:none;transition:border-color .25s}
 #stage{position:relative;background:#000;min-width:0}
 #stage iframe,#stage #yt{position:absolute;inset:0;width:100%;height:100%;border:0}
+#mashupViz{position:absolute;inset:0;width:100%;height:100%;background:#000}
+.tabs{display:flex;gap:8px;margin-bottom:10px}
+.tabs .btn{padding:7px 12px;font-size:14px}
 #panel{display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:var(--panel);border-left:1px solid var(--line);min-height:0;overflow:hidden}
 .np .nt{font-weight:700;font-size:clamp(15px,2.3vh,24px);line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .np .nm{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:clamp(12px,1.7vh,16px);margin-top:3px;font-variant-numeric:tabular-nums}
@@ -141,8 +144,12 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
   <div class="cols">
     <div class="find">
       <h2>Find songs</h2>
+      <div class="tabs">
+        <button class="btn primary" id="modeYT" type="button">YouTube</button>
+        <button class="btn" id="modeMash" type="button">My Mashups</button>
+      </div>
       <div class="row">
-        <input id="q" type="search" placeholder="Song, artist, or mashup" aria-label="Search YouTube">
+        <input id="q" type="search" placeholder="Song, artist, or mashup" aria-label="Search">
         <button class="btn" id="btnSearch">Search</button>
       </div>
       <div id="results"></div>
@@ -182,7 +189,7 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
 
 <!-- ============ RIDE VIEW ============ -->
 <section id="ride" hidden>
-  <div id="stage"><div id="yt"></div></div>
+  <div id="stage"><div id="yt"></div><canvas id="mashupViz" hidden></canvas></div>
   <aside id="panel" aria-label="Workout guide">
     <div class="np">
       <div class="nt" id="npTitle"></div>
@@ -207,6 +214,7 @@ dialog::backdrop{background:rgba(0,0,0,.65)}
       <button class="btn" id="cPlay">Pause</button>
       <button class="btn" id="cNext">Next</button>
       <button class="btn" id="cLook">Look ahead 90s</button>
+      <button class="btn" id="cVidToggle" hidden>Show video</button>
       <button class="btn" id="cFull">Full screen</button>
       <button class="btn" id="cBack">Edit playlist</button>
     </div>
@@ -445,6 +453,117 @@ function effort(segs){
 }
 /*PLAN_END*/
 
+// ---------- mashup catalog (Bring Me The Mashup) ----------
+const MASHUP_CATALOG_URL = 'https://bringmethemashup.github.io/new-mashup-site/data/catalog.json';
+const MASHUP_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="112" height="63"><rect width="112" height="63" fill="#1e2532"/><circle cx="30" cy="31" r="14" fill="#2f7dff"/><circle cx="60" cy="31" r="14" fill="#2fd07a" opacity="0.8"/><circle cx="90" cy="31" r="14" fill="#ff3b3b" opacity="0.6"/></svg>'
+);
+let mashupCatalog = null, mashupCatalogPromise = null;
+function loadMashupCatalog(){
+  if(mashupCatalog) return Promise.resolve(mashupCatalog);
+  if(mashupCatalogPromise) return mashupCatalogPromise;
+  mashupCatalogPromise = fetch(MASHUP_CATALOG_URL).then(r=>{
+    if(!r.ok) throw new Error('Could not load your mashup library.');
+    return r.json();
+  }).then(list=>{ mashupCatalog = list.filter(e=>e.isOwnUpload && e.audio && e.audio.publicLink); return mashupCatalog; });
+  return mashupCatalogPromise;
+}
+function mashupLabel(entry){
+  return (entry.sourceSongs && entry.sourceSongs.length) ? entry.sourceSongs.map(s=>s.artist+' – '+s.title).join(' x ') : (entry.displayTitle||'');
+}
+function searchMashups(catalog,q){
+  const needle = q.trim().toLowerCase(); if(!needle) return [];
+  const words = needle.split(/\s+/).filter(Boolean);
+  const hay = e => ((e.displayTitle||'')+' '+mashupLabel(e)+' '+(e.tags||[]).join(' ')+' '+(e.mashupArtist||'')).toLowerCase();
+  return catalog.filter(e=>{ const h = hay(e); return words.every(w=>h.includes(w)); }).slice(0,20);
+}
+
+// ---------- pCloud resolver (ported from Bring Me The Mashup: js/pcloud.js) ----------
+const PCLOUD_CACHE_KEY = 'spinwidget:pcloud:v1';
+let pcloudCache = {};
+try{ pcloudCache = JSON.parse(localStorage.getItem(PCLOUD_CACHE_KEY)||'{}'); }catch(e){}
+function pcloudPersist(){ try{ localStorage.setItem(PCLOUD_CACHE_KEY, JSON.stringify(pcloudCache)); }catch(e){} }
+function pcloudExtractCode(link){ const m = /[?&]code=([A-Za-z0-9]+)/.exec(link||''); return m?m[1]:null; }
+async function pcloudCallApi(host,code){
+  const r = await fetch('https://'+host+'/getpublinkdownload?code='+code, {referrerPolicy:'no-referrer'});
+  const j = await r.json();
+  if(j.result!==0 || !j.hosts || !j.hosts.length) throw new Error('pCloud API result '+j.result);
+  return j;
+}
+async function resolvePcloudUrl(publicLink, force){
+  const code = pcloudExtractCode(publicLink);
+  if(!code) throw new Error('No pCloud code in link');
+  const hit = pcloudCache[code];
+  if(!force && hit && hit.exp > Date.now()+10*60*1000) return hit.url;
+  let j;
+  try{ j = await pcloudCallApi('api.pcloud.com',code); }
+  catch(e){ j = await pcloudCallApi('eapi.pcloud.com',code); }
+  const url = 'https://'+j.hosts[0]+j.path;
+  const exp = Date.parse(j.expires) || (Date.now()+2*60*60*1000);
+  pcloudCache[code] = {url,exp}; pcloudPersist();
+  return url;
+}
+function invalidatePcloud(publicLink){ const code = pcloudExtractCode(publicLink); if(code && pcloudCache[code]){ delete pcloudCache[code]; pcloudPersist(); } }
+
+// ---------- audio-reactive visualizer (ported/trimmed from Bring Me The Mashup: js/visualizer.js) ----------
+const Viz = (()=>{
+  let analyser=null, freq=null, ambient=true, playing=false, canvas=null, ctx=null, raf=0, t0=performance.now();
+  let zoneColor='#2f7dff', zoneColor2='#ff3b3b';
+  const P=[]; const PCOUNT=42;
+  function setAnalyser(a){ analyser=a; ambient=!a; if(a) freq=new Uint8Array(a.frequencyBinCount); }
+  function setPlaying(v){ playing=v; }
+  function setAmbient(v){ ambient = v || !analyser; }
+  function setZoneColors(c1,c2){ zoneColor=c1; zoneColor2=c2||c1; }
+  function sample(i,n,time){
+    if(!ambient && analyser){ const idx=Math.floor(Math.pow(i/n,1.6)*(freq.length*0.72)); return freq[idx]/255; }
+    const sp = playing?1:0.35; const x=i/n;
+    return 0.22+0.16*Math.sin(time*0.0012*sp+x*5.1)+0.12*Math.sin(time*0.0021*sp+x*11.7+2)+0.07*Math.sin(time*0.0034*sp+x*23.3+4);
+  }
+  function ensureParticles(w,h){ while(P.length<PCOUNT) P.push({x:Math.random()*w,y:Math.random()*h,r:1+Math.random()*2.5,vx:(Math.random()-.5)*.3,vy:-0.2-Math.random()*.5,a:Math.random()}); }
+  function attach(c){ canvas=c; ctx=c.getContext('2d'); if(!raf) raf=requestAnimationFrame(loop); }
+  function loop(now){
+    raf = requestAnimationFrame(loop);
+    if(!ambient && analyser){ analyser.getByteFrequencyData(freq); }
+    if(!canvas || !canvas.isConnected || canvas.hidden){ return; }
+    const dpr = Math.min(window.devicePixelRatio||1,2);
+    const W = canvas.clientWidth*dpr, H = canvas.clientHeight*dpr;
+    if(canvas.width!==W || canvas.height!==H){ canvas.width=W; canvas.height=H; }
+    if(!W||!H) return;
+    ctx.clearRect(0,0,W,H);
+    ensureParticles(W,H);
+    const grad = ctx.createLinearGradient(0,0,W,0);
+    grad.addColorStop(0,zoneColor); grad.addColorStop(1,zoneColor2);
+    const time = now-t0;
+    const N=96, base=H*0.68;
+    for(let layer=2; layer>=0; layer--){
+      const amp=H*(0.42-layer*0.10);
+      const alpha = layer===0?0.9:(layer===1?0.35:0.16);
+      const off = layer*40;
+      ctx.beginPath(); ctx.moveTo(0,base);
+      for(let i=0;i<=N;i++){
+        const x=(i/N)*W; const e=sample(i,N,time+off); const y=base-Math.pow(e,1.35)*amp;
+        if(i===0) ctx.lineTo(x,y); else { const px=((i-1)/N)*W; ctx.quadraticCurveTo(px+(x-px)/2,y,x,y); }
+      }
+      ctx.lineTo(W,base); ctx.closePath();
+      ctx.globalAlpha=alpha; ctx.fillStyle=grad; ctx.fill();
+      ctx.save(); ctx.translate(0,base*2); ctx.scale(1,-0.35); ctx.globalAlpha=alpha*0.35; ctx.fill(); ctx.restore();
+    }
+    ctx.globalAlpha=1;
+    let energy=0; const EN=24;
+    for(let i=0;i<EN;i++) energy+=sample(i,EN,time);
+    energy/=EN;
+    ctx.fillStyle='rgba(255,255,255,.55)';
+    for(const p of P){
+      p.x+=p.vx*(1+energy*2); p.y+=p.vy*(0.5+energy*3.2); p.a-=0.0025;
+      if(p.y<-10||p.a<=0){ p.x=Math.random()*W; p.y=H*(0.6+Math.random()*0.4); p.a=0.5+Math.random()*0.5; }
+      ctx.globalAlpha=p.a*(0.25+energy*0.75);
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.r*dpr,0,7); ctx.fill();
+    }
+    ctx.globalAlpha=1;
+  }
+  return {setAnalyser,setPlaying,setAmbient,setZoneColors,attach};
+})();
+
 // ---------- helpers ----------
 const esc = s => String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const decode = s => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
@@ -480,11 +599,25 @@ const tracks = () => store.tracks;
 
 function makeTrack(m){
   const g = guessMeta(m.title, m.extra);
-  const t = {uid:nextUid(), id:m.id, title:m.title, channel:m.channel||'', dur:m.dur||210, thumb:m.thumb||('https://i.ytimg.com/vi/'+m.id+'/mqdefault.jpg'),
+  const t = {uid:nextUid(), kind:'youtube', id:m.id, title:m.title, channel:m.channel||'', dur:m.dur||210, thumb:m.thumb||('https://i.ytimg.com/vi/'+m.id+'/mqdefault.jpg'),
     bpm:g.bpm, bpmSrc:g.bpmSrc, genre:g.genre, offset:0, opts:null, plan:null, durKnown: !!m.dur};
   const o = quickPick(t,'balanced',0);
   t.opts = o; t.plan = buildPlan(t,o);
   return t;
+}
+function makeMashupTrack(entry){
+  const label = mashupLabel(entry);
+  const g = guessMeta((entry.displayTitle||'')+' '+label, (entry.tags||[]).join(' '));
+  const thumb = (entry.video && entry.video.sourceId) ? ('https://i.ytimg.com/vi/'+entry.video.sourceId+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
+  const t = {uid:nextUid(), kind:'mashup', id:'mashup:'+entry.id, catalogId:entry.id, title:entry.displayTitle||label, channel:'Bring Me The Mashup',
+    dur:210, durKnown:false, thumb, bpm:g.bpm, bpmSrc:g.bpmSrc, genre:g.genre, offset:0, opts:null, plan:null,
+    audioLink:(entry.audio && entry.audio.publicLink) || null, videoId:(entry.video && entry.video.sourceId) || null};
+  const o = quickPick(t,'balanced',0);
+  t.opts = o; t.plan = buildPlan(t,o);
+  return t;
+}
+function addMashup(entry){
+  const t = makeMashupTrack(entry); store.tracks.push(t); save(); renderTracks(); return t;
 }
 function rebuild(t){ t.plan = buildPlan(t,t.opts); }
 
@@ -527,8 +660,41 @@ async function apiVideos(ids){
     extra:(v.snippet.description||'').slice(0,600)+' '+(v.snippet.tags||[]).join(' ')
   }));
 }
+let findMode = 'youtube';
+function setFindMode(mode){
+  findMode = mode;
+  $('#modeYT').classList.toggle('primary', mode==='youtube');
+  $('#modeMash').classList.toggle('primary', mode==='mashup');
+  $('#q').placeholder = mode==='youtube' ? 'Song, artist, or mashup' : 'Search your mashup library';
+  $('#settings').hidden = mode==='mashup';
+  $('#results').innerHTML = '';
+}
+$('#modeYT').onclick = ()=>setFindMode('youtube');
+$('#modeMash').onclick = ()=>setFindMode('mashup');
+
+let lastMashResults = [];
+async function doSearchMashup(){
+  const q = $('#q').value.trim(); const box = $('#results');
+  if(!q) return;
+  box.innerHTML = '<p class="note">Searching your library...</p>';
+  try{
+    const catalog = await loadMashupCatalog();
+    const hits = searchMashups(catalog,q);
+    lastMashResults = hits;
+    if(!hits.length){ box.innerHTML = '<p class="note">No mashups matched. Try an artist or song name.</p>'; return; }
+    box.innerHTML = hits.map((e,i)=>{
+      const label = mashupLabel(e);
+      const thumbSrc = (e.video && e.video.sourceId) ? ('https://i.ytimg.com/vi/'+e.video.sourceId+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
+      return `<div class="res"><img src="${esc(thumbSrc)}" alt="" loading="lazy"><div><div class="rt">${esc(e.displayTitle||label)}</div><div class="rc">${esc(label)}</div></div><button class="btn" data-addmash="${i}">Add</button></div>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML = '<p class="note err">'+esc(e.message)+'</p>';
+  }
+}
+
 let lastResults = [];
 async function doSearch(){
+  if(findMode==='mashup') return doSearchMashup();
   const q = $('#q').value.trim(); const box = $('#results');
   if(!q) return;
   if(!store.apiKey){
@@ -628,8 +794,10 @@ $('#tracks').addEventListener('change',e=>{
   t.bpm = clamp(Math.round(+e.target.value||t.bpm),60,200); t.bpmSrc = 'manual'; rebuild(t); save(); renderTracks();
 });
 $('#results').addEventListener('click',e=>{
-  const b = e.target.closest('[data-add]'); if(!b) return;
-  addFromMeta(lastResults[+b.dataset.add]); b.textContent = 'Added'; b.disabled = true;
+  const b1 = e.target.closest('[data-add]');
+  if(b1){ addFromMeta(lastResults[+b1.dataset.add]); b1.textContent = 'Added'; b1.disabled = true; return; }
+  const b2 = e.target.closest('[data-addmash]');
+  if(b2){ addMashup(lastMashResults[+b2.dataset.addmash]); b2.textContent = 'Added'; b2.disabled = true; return; }
 });
 $('#btnSearch').onclick = doSearch;
 $('#q').addEventListener('keydown',e=>{ if(e.key==='Enter') doSearch(); });
@@ -713,6 +881,56 @@ $('#fApply').onclick = ()=>{
   dT.opts = o; rebuild(dT); dlg.close(); dT = null; save(); renderTracks();
 };
 
+// ---------- mashup audio playback (ported/trimmed from Bring Me The Mashup: js/player.js) ----------
+let mashupAudio = null, mashupActx = null, mashupAnalyserOk = false, mashupCorsBlocked = false, videoMode = false;
+function ensureMashupAudio(){
+  if(mashupAudio) return mashupAudio;
+  mashupAudio = new Audio();
+  mashupAudio.preload = 'metadata';
+  mashupAudio.addEventListener('loadedmetadata', ()=>{
+    const t = tracks()[cur];
+    if(t && t.kind==='mashup' && mashupAudio.duration>0 && Math.abs(mashupAudio.duration-t.dur)>1.5){
+      t.dur = Math.round(mashupAudio.duration); t.durKnown = true; rebuild(t); save(); layoutHighway();
+    }
+  });
+  mashupAudio.addEventListener('ended', ()=>{ if(!videoMode) nextTrack(); });
+  mashupAudio.addEventListener('error', ()=>{
+    const t = tracks()[cur];
+    if(t && t.kind==='mashup' && t.audioLink) invalidatePcloud(t.audioLink);
+  });
+  mashupAudio.addEventListener('play', ()=>{ Viz.setPlaying(true); syncPlayBtn(1); });
+  mashupAudio.addEventListener('pause', ()=>{ Viz.setPlaying(false); syncPlayBtn(2); });
+  return mashupAudio;
+}
+function ensureMashupGraph(){
+  if(mashupAnalyserOk || mashupCorsBlocked) return;
+  try{
+    mashupActx = mashupActx || new (window.AudioContext||window.webkitAudioContext)();
+    const src = mashupActx.createMediaElementSource(mashupAudio);
+    const an = mashupActx.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0.82;
+    src.connect(an); an.connect(mashupActx.destination);
+    Viz.setAnalyser(an); mashupAnalyserOk = true;
+  }catch(e){ Viz.setAnalyser(null); }
+}
+async function playMashupAudio(t, retried){
+  const a = ensureMashupAudio();
+  if(!t.audioLink){ toast('This mashup has no audio file linked yet.'); return; }
+  try{
+    const url = await resolvePcloudUrl(t.audioLink, !!retried);
+    if(tracks()[cur]!==t) return;
+    if(!mashupCorsBlocked) a.crossOrigin = 'anonymous'; else a.removeAttribute('crossorigin');
+    a.src = url;
+    await a.play();
+    if(mashupActx && mashupActx.state==='suspended') mashupActx.resume();
+    ensureMashupGraph();
+    Viz.setAmbient(!mashupAnalyserOk);
+  }catch(err){
+    if(!retried){ invalidatePcloud(t.audioLink); return playMashupAudio(t, true); }
+    if(!mashupCorsBlocked){ mashupCorsBlocked = true; Viz.setAnalyser(null); Viz.setAmbient(true); return playMashupAudio(t, true); }
+    toast('Could not play this mashup’s audio.');
+  }
+}
+
 // ---------- ride view ----------
 let player = null, ytOK = false, cur = -1, anchor = {t:0,at:0}, lastIdx = -2, raf = 0, ended = false;
 const hw = $('#hw'), hwInner = $('#hwInner');
@@ -737,52 +955,82 @@ function showRide(){
   $('#build').hidden = true; $('#ride').hidden = false;
   if(!raf) raf = requestAnimationFrame(frame);
 }
+function createSharedPlayer(videoId){
+  player = new YT.Player('yt',{width:'100%',height:'100%',videoId,
+    playerVars:{autoplay:1,controls:1,rel:0,fs:0,playsinline:1,iv_load_policy:3,modestbranding:1},
+    events:{onReady:()=>{ ytOK = true; },
+      onStateChange:ev=>{ if(ev.data===0) nextTrack(); syncPlayBtn(ev.data); },
+      onError:()=>{ toast('That video will not play here. Skipping.'); setTimeout(nextTrack,1200); }}});
+}
 async function startClass(from){
   const ts = tracks(); if(!ts.length) return;
   showRide();
   await loadYT();
   cur = clamp(from||0,0,ts.length-1); ended = false;
-  const t = ts[cur];
-  if(!player){
-    player = new YT.Player('yt',{width:'100%',height:'100%',videoId:t.id,
-      playerVars:{autoplay:1,controls:1,rel:0,fs:0,playsinline:1,iv_load_policy:3,modestbranding:1},
-      events:{onReady:()=>{ ytOK = true; onTrackChange(); },
-        onStateChange:ev=>{ if(ev.data===0) nextTrack(); syncPlayBtn(ev.data); },
-        onError:()=>{ toast('That video will not play here. Skipping.'); setTimeout(nextTrack,1200); }}});
-  } else { ytOK = true; player.loadVideoById({videoId:t.id,startSeconds:0}); onTrackChange(); }
+  await goToCurrent();
 }
-function onTrackChange(){
+async function goToCurrent(){
   const t = tracks()[cur]; if(!t) return;
+  videoMode = false;
   anchor = {t:0,at:performance.now()}; ended = false; t._checked = false;
   setText('npTitle',t.title); setText('npIdx','Song '+(cur+1)+' of '+tracks().length);
   setText('bpmV',String(t.bpm)); $('#pulse').style.setProperty('--beat',(60/t.bpm).toFixed(3)+'s');
+
+  if(t.kind==='mashup'){
+    if(player){ try{ player.pauseVideo(); }catch(e){} }
+    $('#yt').hidden = true; $('#mashupViz').hidden = false;
+    $('#cVidToggle').hidden = !t.videoId; $('#cVidToggle').textContent = 'Show video';
+    Viz.attach($('#mashupViz')); Viz.setPlaying(false);
+    await playMashupAudio(t);
+  } else {
+    if(mashupAudio) mashupAudio.pause();
+    $('#mashupViz').hidden = true; $('#yt').hidden = false; $('#cVidToggle').hidden = true;
+    if(!player) createSharedPlayer(t.id);
+    else { ytOK = true; player.loadVideoById({videoId:t.id,startSeconds:0}); }
+  }
   layoutHighway();
 }
 function nextTrack(){
-  if(cur<tracks().length-1){ cur++; player.loadVideoById({videoId:tracks()[cur].id,startSeconds:0}); onTrackChange(); }
+  if(cur<tracks().length-1){ cur++; goToCurrent(); }
   else { ended = true; }
 }
 function prevTrack(){
-  let pt = 0; try{ pt = player.getCurrentTime(); }catch(e){}
-  if(pt>4 || cur===0){ player.seekTo(0,true); anchor = {t:0,at:performance.now()}; return; }
-  cur--; player.loadVideoById({videoId:tracks()[cur].id,startSeconds:0}); onTrackChange();
+  const t = tracks()[cur];
+  let pt = 0;
+  if(t && t.kind==='mashup' && !videoMode){ pt = mashupAudio ? (mashupAudio.currentTime||0) : 0; }
+  else { try{ pt = player.getCurrentTime(); }catch(e){} }
+  if(pt>4 || cur===0){
+    if(t && t.kind==='mashup' && !videoMode){ if(mashupAudio) mashupAudio.currentTime = 0; }
+    else { try{ player.seekTo(0,true); }catch(e){} }
+    anchor = {t:0,at:performance.now()}; return;
+  }
+  cur--; goToCurrent();
 }
 function syncPlayBtn(st){ $('#cPlay').textContent = st===1 ? 'Pause' : 'Play'; }
 
 function frame(){
   raf = requestAnimationFrame(frame);
-  if($('#ride').hidden || !player || !ytOK || cur<0) return;
+  if($('#ride').hidden || cur<0) return;
   const t = tracks()[cur]; if(!t || !t.plan) return;
-  let pt = 0, st = -1;
-  try{ pt = player.getCurrentTime()||0; st = player.getPlayerState(); }catch(e){ return; }
+  const usingAudio = t.kind==='mashup' && !videoMode;
+  if(usingAudio && !mashupAudio) return;
+  if(!usingAudio && (!player || !ytOK)) return;
+
+  let pt = 0, playingNow = false;
+  if(usingAudio){
+    pt = mashupAudio.currentTime||0; playingNow = !mashupAudio.paused;
+  } else {
+    let st = -1; try{ pt = player.getCurrentTime()||0; st = player.getPlayerState(); }catch(e){ return; }
+    playingNow = st===1;
+  }
   const now = performance.now();
   let time;
-  if(st===1){
+  if(playingNow){
     const pred = anchor.t + (now-anchor.at)/1000;
     if(Math.abs(pred-pt)>0.35){ anchor = {t:pt,at:now}; time = pt; } else time = pred;
   } else { anchor = {t:pt,at:now}; time = pt; }
 
-  if(!t._checked && st===1){
+  if(!usingAudio && t.kind==='youtube' && !t._checked && playingNow){
     t._checked = true;
     let d = 0; try{ d = player.getDuration(); }catch(e){}
     if(d>0 && Math.abs(d-t.dur)>1.5){ t.dur = Math.round(d); rebuild(t); save(); layoutHighway(); }
@@ -807,6 +1055,7 @@ function frame(){
       setText('zoneName',z.name); setText('zoneLabel',seg.label+(seg.cue?': '+seg.cue:''));
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
       hwInner.querySelectorAll('.hwseg').forEach((el,i)=>el.classList.toggle('past',i<idx));
+      Viz.setZoneColors(z.color, next?ZONES[next.z].color:z.color);
       lastIdx = idx;
     }
     setText('timer', store.countUp ? fmtUp(elapsed) : fmtDown(remain));
@@ -839,13 +1088,46 @@ function frame(){
 }
 
 $('#btnStart').onclick = ()=>startClass(0);
-$('#cPrev').onclick = ()=>player && prevTrack();
-$('#cNext').onclick = ()=>{ if(player && cur<tracks().length-1) nextTrack(); };
-$('#cPlay').onclick = ()=>{ if(!player) return; player.getPlayerState()===1 ? player.pauseVideo() : player.playVideo(); };
+$('#cPrev').onclick = ()=>{ if(cur>=0) prevTrack(); };
+$('#cNext').onclick = ()=>{ if(cur>=0 && cur<tracks().length-1) nextTrack(); };
+$('#cPlay').onclick = ()=>{
+  const t = tracks()[cur]; if(!t) return;
+  if(t.kind==='mashup' && !videoMode){
+    if(!mashupAudio) return;
+    mashupAudio.paused ? mashupAudio.play().catch(()=>{}) : mashupAudio.pause();
+  } else {
+    if(!player) return;
+    player.getPlayerState()===1 ? player.pauseVideo() : player.playVideo();
+  }
+};
+$('#cVidToggle').onclick = async ()=>{
+  const t = tracks()[cur]; if(!t || t.kind!=='mashup' || !t.videoId) return;
+  videoMode = !videoMode;
+  if(videoMode){
+    if(mashupAudio) mashupAudio.pause();
+    $('#mashupViz').hidden = true; $('#yt').hidden = false;
+    $('#cVidToggle').textContent = 'Back to visualizer';
+    await loadYT();
+    const startAt = mashupAudio ? mashupAudio.currentTime||0 : 0;
+    if(!player) createSharedPlayer(t.videoId);
+    else player.loadVideoById({videoId:t.videoId,startSeconds:startAt});
+  } else {
+    try{ player && player.pauseVideo(); }catch(e){}
+    $('#yt').hidden = true; $('#mashupViz').hidden = false;
+    $('#cVidToggle').textContent = 'Show video';
+    Viz.attach($('#mashupViz'));
+    if(mashupAudio) mashupAudio.play().catch(()=>{});
+  }
+};
 $('#cLook').onclick = ()=>{ store.look = store.look===90?150:(store.look===150?45:90); $('#cLook').textContent = 'Look ahead '+store.look+'s'; save(); layoutHighway(); };
 $('#timerMode').onclick = ()=>{ store.countUp = !store.countUp; $('#timerMode').textContent = store.countUp?'Counting up':'Counting down'; save(); };
 $('#cFull').onclick = ()=>toggleFull();
-$('#cBack').onclick = ()=>{ if(document.fullscreenElement) document.exitFullscreen(); try{player.pauseVideo();}catch(e){} $('#ride').hidden = true; $('#build').hidden = false; renderTracks(); };
+$('#cBack').onclick = ()=>{
+  if(document.fullscreenElement) document.exitFullscreen();
+  try{ player && player.pauseVideo(); }catch(e){}
+  if(mashupAudio) mashupAudio.pause();
+  $('#ride').hidden = true; $('#build').hidden = false; renderTracks();
+};
 function toggleFull(){ if(document.fullscreenElement) document.exitFullscreen(); else $('#ride').requestFullscreen && $('#ride').requestFullscreen(); }
 document.addEventListener('fullscreenchange',()=>{ $('#cFull').textContent = document.fullscreenElement?'Exit full screen':'Full screen'; setTimeout(layoutHighway,120); });
 window.addEventListener('resize',()=>{ if(!$('#ride').hidden) layoutHighway(); });
