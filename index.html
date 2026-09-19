@@ -81,7 +81,10 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 #totals{color:var(--muted);font-size:14px}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 16px}
 #tracks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
-.track{display:grid;grid-template-columns:112px minmax(0,1fr) auto;gap:14px;background:var(--panel);border-radius:14px;padding:12px;align-items:start}
+.track{display:grid;grid-template-columns:112px minmax(0,1fr) auto;gap:14px;background:var(--panel);border-radius:14px;padding:12px;align-items:start;transition:transform .2s ease}
+.track.dragging{transition:none;z-index:6;box-shadow:0 10px 30px rgba(0,0,0,.5);cursor:grabbing}
+.tgrip{cursor:grab;touch-action:none;user-select:none;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:15px;letter-spacing:1px;padding:1px 8px;line-height:1}
+.tgrip:hover{color:var(--text);border-color:#4a5872}
 .thumb{width:112px;height:63px;object-fit:cover;border-radius:8px;background:#000}
 .ttitle{font-weight:700;line-height:1.25;margin-bottom:6px}
 .tmash{font-size:13px;color:var(--muted);margin:-4px 0 8px;line-height:1.4}
@@ -1069,7 +1072,7 @@ function trackHTML(t,i){
     <div class="tacts">
       <button class="btn" data-act="quick">Quick build</button>
       <button class="btn" data-act="custom">Custom</button>
-      <div class="grp"><button class="mini" data-act="up" aria-label="Move up">Up</button><button class="mini" data-act="down" aria-label="Move down">Down</button><button class="mini" data-act="del" aria-label="Remove">Remove</button></div>
+      <div class="grp"><button class="tgrip" type="button" aria-label="Drag to reorder" title="Press and hold to drag">⠿</button><button class="mini" data-act="del" aria-label="Remove">Remove</button></div>
     </div>
   </li>`;
 }
@@ -1091,8 +1094,6 @@ $('#tracks').addEventListener('click',e=>{
   else if(act==='custom'){ return openDialog(t); }
   else if(act==='half'){ t.bpm = clamp(Math.round(t.bpm/2),60,200); t.bpmSrc='manual'; rebuild(t); }
   else if(act==='double'){ t.bpm = clamp(Math.round(t.bpm*2),60,200); t.bpmSrc='manual'; rebuild(t); }
-  else if(act==='up' && i>0){ [ts[i-1],ts[i]] = [ts[i],ts[i-1]]; }
-  else if(act==='down' && i<ts.length-1){ [ts[i+1],ts[i]] = [ts[i],ts[i+1]]; }
   else if(act==='del'){ ts.splice(i,1); }
   save(); renderTracks();
 });
@@ -1101,6 +1102,94 @@ $('#tracks').addEventListener('change',e=>{
   const t = byUid(e.target.closest('.track').dataset.uid); if(!t) return;
   t.bpm = clamp(Math.round(+e.target.value||t.bpm),60,200); t.bpmSrc = 'manual'; rebuild(t); save(); renderTracks();
 });
+
+// ---------- drag-to-reorder (press-and-hold on touch, click-and-drag on desktop) ----------
+(function(){
+  const list = $('#tracks');
+  const GAP = 12; // matches #tracks{gap:12px}
+  let drag = null;
+
+  function cleanup(){
+    if(drag && drag.items){
+      drag.items.forEach(el=>{ el.style.transform=''; el.classList.remove('dragging'); });
+    }
+    document.removeEventListener('pointermove', onMove);
+    document.removeEventListener('pointerup', onUp);
+    document.removeEventListener('pointercancel', onUp);
+    document.body.style.userSelect = '';
+    drag = null;
+  }
+
+  function beginDrag(li, startY){
+    const items = Array.from(list.children);
+    const draggedIndex = items.indexOf(li);
+    const rects = items.map(el=>el.getBoundingClientRect());
+    const others = items.map((_,i)=>i).filter(i=>i!==draggedIndex);
+    const mids = others.map(i=>rects[i].top + rects[i].height/2);
+    drag = {li, items, draggedIndex, draggedHeight: rects[draggedIndex].height, others, mids,
+      startY, baseCenter: rects[draggedIndex].top + rects[draggedIndex].height/2, insertIndex: draggedIndex, pending:false};
+    li.classList.add('dragging');
+    document.body.style.userSelect = 'none';
+  }
+
+  function applyShifts(){
+    const shiftAmt = drag.draggedHeight + GAP;
+    drag.items.forEach((el,i)=>{
+      if(i===drag.draggedIndex) return;
+      let shift = 0;
+      if(drag.insertIndex > drag.draggedIndex && i>drag.draggedIndex && i<drag.insertIndex) shift = -shiftAmt;
+      else if(drag.insertIndex <= drag.draggedIndex && i>=drag.insertIndex && i<drag.draggedIndex) shift = shiftAmt;
+      el.style.transform = shift ? `translateY(${shift}px)` : '';
+    });
+  }
+
+  function onMove(e){
+    if(!drag) return;
+    if(drag.pending){
+      if(Math.abs(e.clientY - drag.startY) > 8) cleanup();
+      return;
+    }
+    e.preventDefault();
+    const dy = e.clientY - drag.startY;
+    drag.li.style.transform = `translateY(${dy}px)`;
+    const draggedCenter = drag.baseCenter + dy;
+    let insertPos = 0;
+    for(const mid of drag.mids){ if(draggedCenter > mid) insertPos++; else break; }
+    const insertIndex = insertPos < drag.others.length ? drag.others[insertPos] : drag.items.length;
+    if(insertIndex !== drag.insertIndex){ drag.insertIndex = insertIndex; applyShifts(); }
+  }
+
+  function onUp(){
+    if(!drag) return;
+    if(drag.pending){ cleanup(); return; }
+    const {draggedIndex} = drag;
+    let finalIndex = clamp(drag.insertIndex > draggedIndex ? drag.insertIndex-1 : drag.insertIndex, 0, drag.items.length-1);
+    if(finalIndex !== draggedIndex){
+      const ts = tracks();
+      const [moved] = ts.splice(draggedIndex,1);
+      ts.splice(finalIndex,0,moved);
+      save();
+    }
+    cleanup();
+    renderTracks();
+  }
+
+  list.addEventListener('pointerdown', e=>{
+    const handle = e.target.closest('.tgrip'); if(!handle) return;
+    const li = handle.closest('.track'); if(!li) return;
+    e.preventDefault();
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+    document.addEventListener('pointercancel', onUp);
+    if(e.pointerType==='touch'){
+      const startY = e.clientY;
+      drag = {pending:true, startY};
+      setTimeout(()=>{ if(drag && drag.pending){ beginDrag(li, startY); } }, 320);
+    } else {
+      beginDrag(li, e.clientY);
+    }
+  });
+})();
 $('#results').addEventListener('click',e=>{
   const b1 = e.target.closest('[data-add]');
   if(b1){ addFromMeta(lastResults[+b1.dataset.add]); b1.textContent = 'Added'; b1.disabled = true; return; }
