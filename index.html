@@ -216,6 +216,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #timer{font-family:var(--disp);font-weight:800;font-size:clamp(58px,12.5vh,160px);line-height:.9;font-variant-numeric:tabular-nums;text-shadow:0 0 40px rgba(47,125,255,.25)}
 #timerMode{align-self:flex-start;margin-top:6px;font-size:clamp(12px,1.6vh,15px)}
 #callout{display:flex;align-items:center;gap:.18em;border-radius:14px;padding:8px 14px;background:var(--panel2);font-weight:800;font-size:clamp(30px,7.2vh,96px);line-height:.98;box-shadow:var(--shadow-sm);flex-wrap:wrap}
+#callout.long{font-size:clamp(14px,2.4vh,26px);font-weight:700;line-height:1.15}
 #callout .sw{width:.62em;height:.62em;border-radius:.14em;flex:none;background:var(--z0);box-shadow:0 0 12px -1px var(--zone-next)}
 #callout.hot{outline:3px solid var(--zone-next);animation:hot .5s ease-in-out infinite alternate}
 @keyframes hot{to{background:#2d3648}}
@@ -1503,9 +1504,11 @@ function frame(){
       setText('calloutText','Next: '+nz.name+' in '+fmtDown(remain)+(remain<=10?'  '+next.cue:''));
       const isHot = changing && remain<=10;
       callout.classList.toggle('hot',isHot);
+      callout.classList.remove('long');
       $('#ride').classList.toggle('edgehot',isHot);
     } else {
       callout.classList.remove('hot');
+      callout.classList.add('long');
       $('#ride').classList.remove('edgehot');
       const nt = tracks()[cur+1];
       callout.querySelector('.sw').style.background = '#5a667c';
@@ -1519,7 +1522,7 @@ function frame(){
       card.classList.remove('flash'); hwInner.querySelectorAll('.hwseg').forEach(el=>el.classList.remove('past')); }
     setText('zoneName','Get ready'); setText('zoneLabel','First up: '+fz.name);
     setText('timer', fmtDown(-p));
-    callout.querySelector('.sw').style.background = fz.color; callout.classList.remove('hot');
+    callout.querySelector('.sw').style.background = fz.color; callout.classList.remove('hot','long');
     $('#ride').classList.remove('edgehot');
     setText('calloutText','Opens in '+fz.name+' in '+fmtDown(-p));
     hwInner.style.transform = 'translateY('+(nowY-(plan.D-p)*pps)+'px)';
