@@ -697,6 +697,93 @@ async function resolvePcloudUrl(publicLink, force){
 }
 function invalidatePcloud(publicLink){ const code = pcloudExtractCode(publicLink); if(code && pcloudCache[code]){ delete pcloudCache[code]; pcloudPersist(); } }
 
+// ---------- real BPM detection for mashup tracks (direct audio access via pCloud) ----------
+// Ian's own mashups stream straight from pCloud, so unlike YouTube we can actually
+// fetch + decode the audio and measure its tempo instead of guessing from genre.
+// Energy-based beat detection: low-pass filter to isolate the kick/bass, pick
+// amplitude peaks spaced no closer than the fastest allowed tempo, then vote on
+// the most common peak-to-peak interval (folded into 60-200 BPM by octave).
+const BPM_CACHE_KEY = 'spinwidget:bpm:v1';
+let bpmCache = {}; try{ bpmCache = JSON.parse(localStorage.getItem(BPM_CACHE_KEY)||'{}')||{}; }catch(e){ bpmCache={}; }
+function bpmPersist(){ try{ localStorage.setItem(BPM_CACHE_KEY, JSON.stringify(bpmCache)); }catch(e){} }
+let bpmLane = Promise.resolve(); // one decode at a time — decoding a full mp3 is heavy
+function bpmThrottled(fn){ const run = bpmLane.then(fn, fn); bpmLane = run.then(()=>{}, ()=>{}); return run; }
+
+async function analyzeTempoFromBuffer(audioBuffer){
+  const sr = audioBuffer.sampleRate;
+  const maxSec = Math.min(audioBuffer.duration, 60); // first minute is plenty for tempo
+  const frames = Math.max(1, Math.floor(maxSec*sr));
+  const OfflineCtx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const offline = new OfflineCtx(1, frames, sr);
+  const src = offline.createBufferSource(); src.buffer = audioBuffer;
+  const filter = offline.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 150; filter.Q.value = 1;
+  src.connect(filter); filter.connect(offline.destination);
+  src.start(0);
+  const rendered = await offline.startRendering();
+  const data = rendered.getChannelData(0);
+  const rsr = rendered.sampleRate;
+  const minBpm = 60, maxBpm = 200;
+  const minGapSec = 60/maxBpm;
+  // amplitude envelope, ~10ms windows
+  const win = Math.max(1, Math.floor(rsr*0.01));
+  const envelope = [];
+  for(let i=0;i<data.length;i+=win){
+    let max = 0; const end = Math.min(i+win, data.length);
+    for(let j=i;j<end;j++){ const v = Math.abs(data[j]); if(v>max) max = v; }
+    envelope.push(max);
+  }
+  const avgWindow = 40; // ~0.4s of envelope frames, adaptive threshold
+  const peaks = [];
+  let lastPeak = -Infinity;
+  for(let i=0;i<envelope.length;i++){
+    const start = Math.max(0,i-avgWindow); let sum=0, n=0;
+    for(let k=start;k<i;k++){ sum += envelope[k]; n++; }
+    const localAvg = n ? sum/n : 0;
+    if(envelope[i] > localAvg*1.3 && envelope[i] > 0.04){
+      const t = i*win/rsr;
+      if(t-lastPeak > minGapSec){ peaks.push(t); lastPeak = t; }
+    }
+  }
+  if(peaks.length < 4) return null;
+  const bins = {};
+  for(let i=0;i<peaks.length;i++){
+    for(let j=i+1;j<Math.min(i+9,peaks.length);j++){
+      const interval = peaks[j]-peaks[i]; if(interval<=0) continue;
+      let bpm = 60/interval;
+      while(bpm < minBpm) bpm *= 2;
+      while(bpm > maxBpm) bpm /= 2;
+      const bin = Math.round(bpm);
+      bins[bin] = (bins[bin]||0)+1;
+    }
+  }
+  let bestBin = null, bestCount = 0;
+  for(const [bin,count] of Object.entries(bins)){ if(count>bestCount){ bestCount = count; bestBin = +bin; } }
+  return bestBin ? clamp(bestBin,60,200) : null;
+}
+function applyDetectedBpm(t, bpm){
+  t.bpm = bpm; t.bpmSrc = 'audio'; rebuild(t); save();
+  if(tracks().includes(t)) renderTracks();
+}
+function analyzeMashupBpmFor(t){
+  if(!t || t.kind!=='mashup' || !t.audioLink || t._bpmTried) return;
+  if(t.bpmSrc==='manual' || t.bpmSrc==='audio') return;
+  t._bpmTried = true;
+  if(t.catalogId && bpmCache[t.catalogId]){ applyDetectedBpm(t, bpmCache[t.catalogId]); return; }
+  bpmThrottled(async ()=>{
+    try{
+      const url = await resolvePcloudUrl(t.audioLink);
+      const r = await fetch(url); if(!r.ok) throw new Error('fetch '+r.status);
+      const buf = await r.arrayBuffer();
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      const actx = new Ctx();
+      const audioBuffer = await actx.decodeAudioData(buf);
+      try{ actx.close(); }catch(e){}
+      const bpm = await analyzeTempoFromBuffer(audioBuffer);
+      if(bpm){ if(t.catalogId){ bpmCache[t.catalogId] = bpm; bpmPersist(); } applyDetectedBpm(t, bpm); }
+    }catch(e){ console.warn('BPM analysis failed for', t.title, e); }
+  });
+}
+
 // ---------- mashup screensaver: artist artwork (ported from Bring Me The Mashup: js/artwork.js) ----------
 // Real artist photos, no API key: Deezer search first (actual photos),
 // iTunes album art as fallback. JSONP so CORS never applies. Cached in
@@ -954,7 +1041,7 @@ function makeMashupTrack(entry){
   return t;
 }
 function addMashup(entry){
-  const t = makeMashupTrack(entry); store.tracks.push(t); save(); renderTracks(); return t;
+  const t = makeMashupTrack(entry); store.tracks.push(t); save(); renderTracks(); analyzeMashupBpmFor(t); return t;
 }
 function rebuild(t){ t.plan = buildPlan(t,t.opts); }
 
@@ -1106,7 +1193,7 @@ function pipsHTML(level){
 function trackHTML(t,i){
   const e = effort(t.plan.segs);
   const goal = t.plan.style==='recover' ? '' : ((GOALS[t.opts.goal]||{}).label||'');
-  const tip = t.bpmSrc==='guess' ? 'Estimated from genre. Check it.' : (t.bpmSrc==='title' ? 'Found in the title' : 'Set by you');
+  const tip = t.bpmSrc==='guess' ? 'Estimated from genre. Check it.' : (t.bpmSrc==='title' ? 'Found in the title' : (t.bpmSrc==='audio' ? 'Detected from the actual audio' : 'Set by you'));
   return `<li class="track" data-uid="${t.uid}" data-level="${e.level}">
     <img class="thumb" src="${esc(t.thumb)}" alt="" loading="lazy">
     <div class="tmain">
@@ -1134,6 +1221,9 @@ function renderTracks(){
   const total = ts.reduce((a,t)=>a+t.dur,0);
   $('#totals').textContent = ts.length ? ts.length+(ts.length===1?' song':' songs')+', '+fmt(total) : '';
   $('#btnStart').disabled = !ts.length; $('#btnQuickClass').disabled = !ts.length; $('#btnRank').disabled = ts.length<2;
+  // Real BPM detection for mashup tracks (direct audio access) — catches tracks
+  // saved before this feature existed too, not just newly-added ones.
+  ts.forEach(analyzeMashupBpmFor);
 }
 const byUid = uid => tracks().find(t=>t.uid===+uid);
 
