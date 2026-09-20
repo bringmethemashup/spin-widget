@@ -1734,6 +1734,7 @@ function newPlaylist(){
 function loadPlaylistIntoCreator(id){
   const p = store.playlists.find(x=>x.id===id); if(!p) return;
   store.tracks = JSON.parse(JSON.stringify(p.tracks));
+  autoPlanClass(store.tracks);   // playlists saved before auto-planning pick up the arc on open
   store.currentId = p.id; $('#plName').value = p.name;
   save(); renderTracks(); showCreator();
   showSavedNote('Loaded "'+p.name+'"');
@@ -1772,7 +1773,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeLoadMenu(); 
 function startSavedPlaylist(id){
   const p = store.playlists.find(x=>x.id===id); if(!p || !p.tracks.length) return;
   p.tracks.forEach(t=>{ if(!t.plan || !t.opts){ t.opts = quickPick(t,'balanced',0); rebuild(t); } });
-  autoPlanClass(p.tracks);   // older playlists saved before auto-planning get the arc too
+  autoPlanClass(p.tracks); save();   // older playlists saved before auto-planning get the arc too
   activeList = p.tracks; activeOrigin = 'library';
   startClass(0);
 }
@@ -1799,7 +1800,7 @@ $('#apiKey').value = store.apiKey || '';
 $('#cLook').textContent = 'Look ahead '+store.look+'s';
 $('#timerMode').textContent = store.countUp?'Counting up':'Counting down';
 store.tracks.forEach(t=>{ if(!t.plan || !t.opts) { t.opts = quickPick(t,'balanced',0); rebuild(t); } });
-autoPlanClass(store.tracks);
+autoPlanClass(store.tracks); save();   // persist the arc so what's shown is what's stored
 if(store.currentId){ const p = store.playlists.find(x=>x.id===store.currentId); if(p) $('#plName').value = p.name; }
 showLibrary();
 renderTracks();
