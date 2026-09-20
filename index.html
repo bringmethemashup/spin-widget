@@ -136,6 +136,8 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .bpmbox{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:2px 8px;color:var(--text)}
 .lenbox{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:6px 12px;color:var(--text);font-weight:700}
 .lenbox input{width:56px;background:transparent;border:0;color:var(--text);font:inherit;text-align:right}
+#recs{display:flex;flex-direction:column;gap:8px;margin:12px 0 4px;padding:14px;border:1px dashed var(--card-border);border-radius:14px;background:rgba(255,255,255,.02)}
+#recs .rd{color:#9fd0ff}
 #totals .short{color:#e6c866}
 #totals .ok{color:#7fd6a2}
 .bpmbox.guess{border-style:dashed;border-color:#8a7a3a}
@@ -381,11 +383,13 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       <div class="listhead"><h2>Class playlist</h2><span id="totals"></span></div>
       <div class="actions">
         <button class="btn" id="btnArc">Build the arc</button>
+        <button class="btn" id="btnSuggest">Suggest songs</button>
         <label class="lenbox" title="How long the class needs to run. Build the arc tells you if you're short."><input id="classLen" type="number" min="10" max="120" step="5" value="45" aria-label="Class length in minutes"> min class</label>
         <button class="btn" id="btnQuickClass">Quick build class</button>
         <button class="btn" id="btnRank">Sort by difficulty</button>
         <button class="btn primary spectrum" id="btnStart">Start class</button>
       </div>
+      <div id="recs" hidden></div>
       <ol id="tracks"></ol>
       <div id="empty">Add songs from search or paste a link. The class plans itself as you go — easy opener, build, peak, cool down — and re-plans whenever you add, remove or reorder a song. Change any one song with Quick build or Custom and it stays exactly as you set it.</div>
     </div>
@@ -1093,6 +1097,44 @@ function arcOrder(list){
   return [...byEnergy, peak, cool];  // the rest ramp up in between
 }
 function classTargetSec(){ return clamp(+store.classLen||45,10,120)*60; }
+
+// ---------- song recommendations ----------
+// Helps fill out or end a playlist, from Ian's own catalog — no YouTube key needed, and the
+// audio is already wired up. A mashup's real length isn't known until it plays (the catalog
+// doesn't carry duration), so suggestions are picked by how well they FIT THE SHAPE of the
+// class, and the headline talks about the gap in minutes rather than pretending to fill it
+// exactly.
+function provisionalTrack(entry){
+  const g = guessMeta((entry.displayTitle||'')+' '+mashupLabel(entry), (entry.tags||[]).join(' '));
+  return {bpm:g.bpm, genre:g.genre, dur:210, offset:0};
+}
+function recommendSongs(catalog, ts, gapSec){
+  const have = new Set(ts.map(t=>t.catalogId).filter(Boolean));
+  const pool = catalog.filter(e=>!have.has(e.id)).map(e=>({e, en:songEnergy(provisionalTrack(e))}));
+  if(!pool.length) return [];
+  const cur = ts.map(songEnergy);
+  const hi  = cur.length ? Math.max(...cur) : null;
+  const lo  = cur.length ? Math.min(...cur) : null;
+  const mid = cur.length ? cur.reduce((a,b)=>a+b,0)/cur.length : 0.6;
+  const used = new Set(), out = [];
+  const free = () => pool.filter(p=>!used.has(p.e.id));
+  const take = (p,reason) => { if(p){ used.add(p.e.id); out.push({entry:p.e, reason}); } };
+  // For the peak, offer the genuinely hardest thing available — not merely a notch above
+  // what's already there, which is what a nearest-to-target search would return.
+  const hardest = free().sort((a,b)=>b.en-a.en)[0];
+  take(hardest, (hi!==null && hardest && hardest.en>hi)
+    ? 'harder than anything in here — could take the peak'
+    : 'your hardest option, for the peak');
+  // the body of the build
+  free().sort((a,b)=>Math.abs(a.en-mid)-Math.abs(b.en-mid)).slice(0, gapSec>30 ? 3 : 2)
+        .forEach(p=>take(p,'sits in the build'));
+  // something to land on
+  const gentlest = free().sort((a,b)=>a.en-b.en)[0];
+  take(gentlest, (lo!==null && gentlest && gentlest.en<lo)
+    ? 'gentle enough to land the class'
+    : 'the gentlest thing left, to land the class');
+  return out;
+}
 function goalForPosition(i,n){
   if(n===1) return 'balanced';
   if(i===n-1) return 'cooldown';         // always land soft
@@ -1555,6 +1597,42 @@ $('#btnArc').onclick = ()=>{
     toast('Arc built — builds to '+peak+' second-to-last, then cools down. '+fmt(total)+' for a '+store.classLen+'-minute class.');
   }
 };
+let lastRecs = [], recsOpen = false;
+function recsHeadline(ts){
+  if(!ts.length) return 'Nothing in the class yet — here are a few to start it with.';
+  const gap = classTargetSec()-totalDur(ts);
+  return gap>30
+    ? 'This class is '+fmt(gap)+' short of '+store.classLen+' min. These would help fill it.'
+    : 'This class already covers '+store.classLen+' min — these would round it out.';
+}
+async function showRecs(){
+  const box = $('#recs'); box.hidden = false;
+  box.innerHTML = '<p class="note">Looking through your mashups...</p>';
+  try{
+    const catalog = await loadMashupCatalog();
+    if(!recsOpen) return;
+    const ts = tracks();
+    lastRecs = recommendSongs(catalog, ts, classTargetSec()-totalDur(ts));
+    if(!lastRecs.length){ box.innerHTML = '<p class="note">Every mashup in your library is already in this class.</p>'; return; }
+    box.innerHTML = '<p class="note">'+esc(recsHeadline(ts))+'</p>' + lastRecs.map((r,i)=>{
+      const e = r.entry, label = mashupLabelShort(e);
+      const thumb = (e.video && e.video.sourceId) ? ('https://i.ytimg.com/vi/'+e.video.sourceId+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
+      return `<div class="res"><img src="${esc(thumb)}" alt="" loading="lazy"><div><div class="rt">${esc(e.displayTitle||label)}</div><div class="rc">${esc(label)}</div><div class="rd">${esc(r.reason)}</div></div><button class="btn" data-addrec="${i}">Add</button></div>`;
+    }).join('');
+  }catch(err){ box.innerHTML = '<p class="note err">'+esc(err.message||'Could not load your mashup library.')+'</p>'; }
+}
+$('#btnSuggest').onclick = ()=>{
+  recsOpen = !recsOpen;
+  $('#btnSuggest').textContent = recsOpen ? 'Hide suggestions' : 'Suggest songs';
+  if(recsOpen) showRecs(); else $('#recs').hidden = true;
+};
+$('#recs').addEventListener('click', e=>{
+  const b = e.target.closest('[data-addrec]'); if(!b) return;
+  const r = lastRecs[+b.dataset.addrec]; if(!r) return;
+  addMashup(r.entry);                 // adds, re-plans the class and re-renders
+  b.textContent = 'Added'; b.disabled = true;
+  setTimeout(showRecs, 400);          // refresh: the gap and the picks have both moved
+});
 // The class already plans itself on every change, so this button's job is now the reset:
 // it takes back the songs the instructor pinned by hand and rebuilds everything.
 $('#btnQuickClass').onclick = ()=>{
