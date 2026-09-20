@@ -136,6 +136,7 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .tplan{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:14px;color:var(--muted)}
 .tplan b{color:var(--text)}
 .tplan .warn{color:#e6c866}
+.tplan .pin{color:#9fd0ff;border:1px solid rgba(159,208,255,.35);background:rgba(159,208,255,.1);border-radius:999px;padding:1px 9px;font-size:12px;font-weight:700}
 .pips{display:inline-flex;gap:3px}
 .pips i{width:9px;height:9px;border-radius:2px;background:#2b3344}
 .tacts{display:flex;flex-direction:column;gap:6px;align-items:stretch}
@@ -314,7 +315,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
         <button class="btn primary spectrum" id="btnStart">Start class</button>
       </div>
       <ol id="tracks"></ol>
-      <div id="empty">Add songs from search or paste a link. Each song gets a workout plan the moment it lands, and you can change it with Quick build or Custom.</div>
+      <div id="empty">Add songs from search or paste a link. The class plans itself as you go — easy opener, build, peak, cool down — and re-plans whenever you add, remove or reorder a song. Change any one song with Quick build or Custom and it stays exactly as you set it.</div>
     </div>
   </div>
 </section>
@@ -954,9 +955,59 @@ function makeMashupTrack(entry){
   return t;
 }
 function addMashup(entry){
-  const t = makeMashupTrack(entry); store.tracks.push(t); save(); renderTracks(); return t;
+  const t = makeMashupTrack(entry); store.tracks.push(t); autoPlanClass(store.tracks); save(); renderTracks(); return t;
 }
 function rebuild(t){ t.plan = buildPlan(t,t.opts); }
+
+// ---------- automatic class planning ----------
+// The whole class re-plans itself whenever the playlist changes (song added, removed or
+// reordered), so the arc — easy opener, build, peak, cool down — always fits the songs
+// that are actually in it, in the order they're actually in. Nothing to press.
+// Anything the instructor changes by hand is flagged t.manual and left alone from then
+// on; "Quick build class" is the one control that takes those back too.
+//
+// Interval timing varies per song as well. Without this every interval song in a class
+// ran the same work/rest split, which rides as one long identical block.
+const INTERVAL_SHAPES = {
+  endurance: [[90,45],[120,60],[75,45]],
+  balanced:  [[45,30],[60,30],[30,30],[75,45]],
+  high:      [[30,45],[20,20],[40,20],[25,35]]
+};
+function goalForPosition(i,n){
+  if(n===1) return 'balanced';
+  if(i===0) return 'endurance';          // open easy, let legs arrive
+  if(i===n-1) return 'cooldown';         // always land soft
+  const p = i/(n-1);
+  return p<0.4 ? 'balanced' : (p<0.85 ? 'high' : 'balanced');
+}
+function autoPlanClass(list,force){
+  const ts = list || tracks(), n = ts.length;
+  let recent = [], ivN = 0;               // recent = last two styles, ivN = interval songs so far
+  ts.forEach((t,i)=>{
+    if(t.manual && !force){ recent = [...recent, t.opts && t.opts.style].slice(-2); return; }
+    if(force) t.manual = false;
+    const goal = goalForPosition(i,n);
+    let o = quickPick(t,goal,0);
+    // don't let the class repeat itself: skip a style used in either of the last two songs.
+    // The substitute still has to suit the song — a race needs cadence to be a race, and a
+    // five-minute time trial is a slog rather than a workout.
+    if(o.style!=='recover' && recent.includes(o.style)){
+      const D = t.dur-(t.offset||0), bpm = t.bpm||120;
+      const alt = ROTATION.filter(s=>!recent.includes(s)
+        && !(s==='race' && (goal!=='high' || bpm<120))
+        && !(s==='timetrial' && D>=300));
+      if(alt.length) o = {style:alt[i%alt.length],goal};
+    }
+    if(i===0 && o.style==='race') o.style = 'interval';
+    if(o.style==='interval'){
+      const shapes = INTERVAL_SHAPES[goal] || INTERVAL_SHAPES.balanced;
+      const [w,r] = shapes[ivN++ % shapes.length];
+      o.workSec = w; o.restSec = r;
+    }
+    t.opts = o; t.qb = 0; rebuild(t);
+    recent = [...recent, o.style].slice(-2);
+  });
+}
 
 // ---------- YouTube API loader ----------
 let ytPromise = null;
@@ -1077,7 +1128,7 @@ async function doSearch(){
   }
 }
 function addFromMeta(m){
-  const t = makeTrack(m); store.tracks.push(t); save(); renderTracks(); return t;
+  const t = makeTrack(m); store.tracks.push(t); autoPlanClass(store.tracks); save(); renderTracks(); return t;
 }
 async function addLink(){
   const raw = $('#link').value.trim(); if(!raw) return;
@@ -1106,6 +1157,9 @@ function pipsHTML(level){
 function trackHTML(t,i){
   const e = effort(t.plan.segs);
   const goal = t.plan.style==='recover' ? '' : ((GOALS[t.opts.goal]||{}).label||'');
+  // show the interval split, since the auto-planner now varies it song to song
+  const iv = t.plan.style==='interval' && t.opts.workSec
+    ? `<span title="Work / recover, in seconds">${t.opts.workSec}s on &middot; ${t.opts.restSec}s off</span>` : '';
   const tip = t.bpmSrc==='guess' ? 'Estimated from genre. Check it.' : (t.bpmSrc==='title' ? 'Found in the title' : 'Set by you');
   return `<li class="track" data-uid="${t.uid}" data-level="${e.level}">
     <img class="thumb" src="${esc(t.thumb)}" alt="" loading="lazy">
@@ -1118,11 +1172,12 @@ function trackHTML(t,i){
         <button class="mini" data-act="half" title="Half tempo">&frac12;</button><button class="mini" data-act="double" title="Double tempo">&times;2</button>
       </div>
       <div class="strip">${stripHTML(t.plan.segs,t.plan.D)}</div>
-      <div class="tplan"><b>${STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.bpmSrc==='guess'?'<span class="warn">BPM is an estimate</span>':''}</div>
+      <div class="tplan"><b>${STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}${iv}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.manual?'<span class="pin" title="You set this one by hand — the automatic class plan leaves it alone">Custom</span>':''}${t.bpmSrc==='guess'?'<span class="warn">BPM is an estimate</span>':''}</div>
     </div>
     <div class="tacts">
       <button class="btn" data-act="quick">Quick build</button>
       <button class="btn" data-act="custom">Custom</button>
+      ${t.manual?'<button class="mini" data-act="auto" title="Hand this song back to the automatic class plan">Back to auto</button>':''}
       <div class="grp"><button class="tgrip" type="button" aria-label="Drag to reorder" title="Press and hold to drag">⠿</button><button class="mini" data-act="del" aria-label="Remove">Remove</button></div>
     </div>
   </li>`;
@@ -1141,11 +1196,14 @@ $('#tracks').addEventListener('click',e=>{
   const b = e.target.closest('[data-act]'); if(!b) return;
   const li = b.closest('.track'); const t = byUid(li.dataset.uid); const act = b.dataset.act; const ts = tracks(); const i = ts.indexOf(t);
   if(act==='bpm') return;
-  if(act==='quick'){ t.qb = (t.qb||0)+1; t.opts = quickPick(t,t.opts.goal||'balanced',t.qb>1?1:0); rebuild(t); }
+  // Quick build on one song is an explicit per-song choice, so it pins that song
+  // (t.manual) and the automatic class planner stops touching it.
+  if(act==='quick'){ t.qb = (t.qb||0)+1; t.opts = quickPick(t,t.opts.goal||'balanced',t.qb>1?1:0); t.manual = true; rebuild(t); }
+  else if(act==='auto'){ t.manual = false; autoPlanClass(ts); toast('Back on the automatic plan.'); }
   else if(act==='custom'){ return openDialog(t); }
   else if(act==='half'){ t.bpm = clamp(Math.round(t.bpm/2),60,200); t.bpmSrc='manual'; rebuild(t); }
   else if(act==='double'){ t.bpm = clamp(Math.round(t.bpm*2),60,200); t.bpmSrc='manual'; rebuild(t); }
-  else if(act==='del'){ ts.splice(i,1); }
+  else if(act==='del'){ ts.splice(i,1); autoPlanClass(ts); }
   save(); renderTracks();
 });
 $('#tracks').addEventListener('change',e=>{
@@ -1219,6 +1277,7 @@ $('#tracks').addEventListener('change',e=>{
       const ts = tracks();
       const [moved] = ts.splice(draggedIndex,1);
       ts.splice(finalIndex,0,moved);
+      autoPlanClass(ts);   // the arc follows the new order
       save();
     }
     cleanup();
@@ -1253,20 +1312,15 @@ $('#btnAddLink').onclick = addLink;
 $('#link').addEventListener('keydown',e=>{ if(e.key==='Enter') addLink(); });
 $('#btnSaveKey').onclick = ()=>{ store.apiKey = $('#apiKey').value.trim(); save(); toast(store.apiKey?'Key saved.':'Key cleared.'); };
 
+// The class already plans itself on every change, so this button's job is now the reset:
+// it takes back the songs the instructor pinned by hand and rebuilds everything.
 $('#btnQuickClass').onclick = ()=>{
-  const ts = tracks(), n = ts.length; let prev = null;
-  ts.forEach((t,i)=>{
-    let goal;
-    if(n===1) goal = 'balanced';
-    else if(i===0) goal = 'endurance';
-    else if(i===n-1) goal = 'cooldown';
-    else { const p = i/(n-1); goal = p<0.4 ? 'balanced' : (p<0.85 ? 'high' : 'balanced'); }
-    let o = quickPick(t,goal,0);
-    if(o.style===prev && o.style!=='recover'){ const alt = ROTATION.filter(s=>s!==prev && !(s==='race' && goal!=='high')); o = {style:alt[i%alt.length],goal}; }
-    if(i===0 && o.style==='race') o.style = 'interval';
-    t.opts = o; t.qb = 0; rebuild(t); prev = o.style;
-  });
-  save(); renderTracks(); toast('Class built: warm-up, build, peak, cool down.');
+  const ts = tracks();
+  const pinned = ts.filter(t=>t.manual).length;
+  autoPlanClass(ts,true);
+  save(); renderTracks();
+  toast(pinned ? 'Class rebuilt — '+pinned+(pinned===1?' custom song':' custom songs')+' reset to automatic.'
+               : 'Class rebuilt: warm-up, build, peak, cool down.');
 };
 let rankAsc = true;
 $('#btnRank').onclick = ()=>{
@@ -1326,7 +1380,7 @@ $('#fApply').onclick = ()=>{
   const {temp,o} = dialogState();
   if(+$('#fBpm').value !== dT.bpm) dT.bpmSrc = 'manual';
   dT.bpm = temp.bpm; dT.genre = temp.genre; dT.offset = temp.offset; dT.dur = temp.dur; dT.durKnown = true;
-  dT.opts = o; rebuild(dT); dlg.close(); dT = null; save(); renderTracks();
+  dT.opts = o; dT.manual = true; rebuild(dT); dlg.close(); dT = null; save(); renderTracks();
 };
 
 // ---------- mashup audio playback (ported/trimmed from Bring Me The Mashup: js/player.js) ----------
@@ -1718,6 +1772,7 @@ document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeLoadMenu(); 
 function startSavedPlaylist(id){
   const p = store.playlists.find(x=>x.id===id); if(!p || !p.tracks.length) return;
   p.tracks.forEach(t=>{ if(!t.plan || !t.opts){ t.opts = quickPick(t,'balanced',0); rebuild(t); } });
+  autoPlanClass(p.tracks);   // older playlists saved before auto-planning get the arc too
   activeList = p.tracks; activeOrigin = 'library';
   startClass(0);
 }
@@ -1744,6 +1799,7 @@ $('#apiKey').value = store.apiKey || '';
 $('#cLook').textContent = 'Look ahead '+store.look+'s';
 $('#timerMode').textContent = store.countUp?'Counting up':'Counting down';
 store.tracks.forEach(t=>{ if(!t.plan || !t.opts) { t.opts = quickPick(t,'balanced',0); rebuild(t); } });
+autoPlanClass(store.tracks);
 if(store.currentId){ const p = store.playlists.find(x=>x.id===store.currentId); if(p) $('#plName').value = p.name; }
 showLibrary();
 renderTracks();
