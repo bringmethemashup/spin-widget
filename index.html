@@ -1052,7 +1052,37 @@ function makeMashupTrack(entry){
   return t;
 }
 function addMashup(entry){
-  const t = makeMashupTrack(entry); store.tracks.push(t); autoPlanClass(store.tracks); save(); renderTracks(); return t;
+  const t = makeMashupTrack(entry); store.tracks.push(t); autoPlanClass(store.tracks); save(); renderTracks();
+  probeMashupDuration(t);
+  return t;
+}
+// The catalog doesn't store how long a mashup runs, so until now every one counted as a guessed
+// 3:30 while a class was being built, and only got its real length when it happened to play.
+// That quietly skewed the class total, the "short of X min" readout, the arc and the
+// suggestions. pCloud sends no CORS headers so fetch() can't help, but a media element can
+// still read a file's metadata from it — the same reason playback works at all — so the real
+// duration can be learned the moment a song is added, without downloading the audio.
+function probeMashupDuration(t){
+  if(!t || !t.audioLink || t.durKnown) return;
+  let settled = false;
+  const a = new Audio();
+  a.preload = 'metadata';
+  const stop = () => { if(settled) return; settled = true; clearTimeout(timer); try{ a.removeAttribute('src'); a.load(); }catch(e){} };
+  // pCloud stalls often enough that this has to be able to give up (see playMashupAudio)
+  const timer = setTimeout(stop, 12000);
+  a.addEventListener('loadedmetadata', ()=>{
+    const d = Math.round(a.duration);
+    stop();
+    if(!isFinite(d) || d < 20 || d > 1800) return;      // nonsense; keep the estimate
+    if(t.durKnown && t.dur === d) return;
+    t.dur = d; t.durKnown = true;
+    rebuild(t);
+    const ts = tracks();
+    if(ts.indexOf(t) !== -1) autoPlanClass(ts);         // length feeds the arc, so re-plan
+    save(); renderTracks();
+  });
+  a.addEventListener('error', stop);
+  resolvePcloudUrl(t.audioLink).then(url=>{ if(!settled) a.src = url; }).catch(stop);
 }
 function rebuild(t){ t.plan = buildPlan(t,t.opts); }
 
