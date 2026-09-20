@@ -134,6 +134,10 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .tmash{font-size:13px;color:var(--muted);margin:-4px 0 8px;line-height:1.4}
 .tmeta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:14px;margin-bottom:8px}
 .bpmbox{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:2px 8px;color:var(--text)}
+.lenbox{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:6px 12px;color:var(--text);font-weight:700}
+.lenbox input{width:56px;background:transparent;border:0;color:var(--text);font:inherit;text-align:right}
+#totals .short{color:#e6c866}
+#totals .ok{color:#7fd6a2}
 .bpmbox.guess{border-style:dashed;border-color:#8a7a3a}
 .bpmbox input{width:56px;padding:3px 4px;border:0;background:transparent;font-weight:700;font-variant-numeric:tabular-nums}
 .strip{display:flex;height:16px;gap:1px;border-radius:5px;overflow:hidden;background:#0c1017;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
@@ -376,6 +380,8 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     <div class="list">
       <div class="listhead"><h2>Class playlist</h2><span id="totals"></span></div>
       <div class="actions">
+        <button class="btn" id="btnArc">Build the arc</button>
+        <label class="lenbox" title="How long the class needs to run. Build the arc tells you if you're short."><input id="classLen" type="number" min="10" max="120" step="5" value="45" aria-label="Class length in minutes"> min class</label>
         <button class="btn" id="btnQuickClass">Quick build class</button>
         <button class="btn" id="btnRank">Sort by difficulty</button>
         <button class="btn primary spectrum" id="btnStart">Start class</button>
@@ -571,7 +577,9 @@ function tInterval(N,g,o,us){
   return steps;
 }
 function tPyramid(N,g){
-  let lo = Math.max(0,g.base), hi = g.peak;
+  // On a high-intensity song a full sweep down to zone 1 drags the average effort right
+  // back down, so the pyramid keeps its feet off the floor and works the top half.
+  let lo = g.peak>=4 ? Math.max(g.base,g.peak-2) : Math.max(0,g.base), hi = g.peak;
   if(hi<=lo) lo = Math.max(0,hi-1);
   const up = []; for(let z=lo; z<=hi; z++) up.push(z);
   let zs = [...up, ...up.slice(0,-1).reverse()];
@@ -588,7 +596,7 @@ function tPyramid(N,g){
 function tClimb(N,g){
   const hi = g.peak;
   const lo = Math.max(0, Math.min(g.base,hi-1));
-  let zs = []; for(let z=Math.max(lo,hi-3); z<=hi; z++) zs.push(z);
+  let zs = []; for(let z=Math.max(lo,hi-(g.peak>=4?2:3)); z<=hi; z++) zs.push(z);
   const rec = N>=9 ? 1 : 0;
   const body = N - rec;
   if(body<zs.length) zs = zs.slice(-body);
@@ -999,7 +1007,7 @@ let toastT;
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{el.hidden=true;},3600); }
 
 // ---------- state ----------
-const store = {tracks:[], apiKey:'', keyOK:false, countUp:true, look:90, playlists:[], currentId:null};
+const store = {tracks:[], apiKey:'', keyOK:false, countUp:true, look:90, playlists:[], currentId:null, classLen:45};
 function save(){ try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){} }
 function loadStore(){
   try{
@@ -1058,12 +1066,42 @@ const INTERVAL_SHAPES = {
   balanced:  [[45,30],[60,30],[30,30],[75,45]],
   high:      [[30,45],[20,20],[40,20],[25,35]]
 };
+// ---------- arc-based playlist building ----------
+// Ian's shape: open easy, heat up, go intense, put the biggest most explosive song
+// second-to-last, finish on a cool down — and never come in under the class length.
+// Energy is judged from the song itself (tempo, genre, length), not from its current plan,
+// because the plan depends on position and position is exactly what we're deciding.
+function songEnergy(t){
+  const bpm = clamp(+t.bpm||120,60,200);
+  let e = (bpm-80)/80;
+  const g = t.genre||'';
+  if(/EDM|Techno|House/.test(g)) e += .35;
+  else if(/Disco|Rock/.test(g)) e += .2;
+  else if(/R&B|Country/.test(g)) e -= .2;
+  const D = (t.dur||210)-(t.offset||0);
+  if(D<150) e += .15;            // short songs hit harder
+  else if(D>330) e -= .1;        // long ones sprawl
+  return e;
+}
+// Returns the tracks reordered into the arc. Pure — caller decides to commit it.
+function arcOrder(list){
+  const ts = list.slice();
+  if(ts.length<3) return ts;
+  const byEnergy = ts.slice().sort((a,b)=>songEnergy(a)-songEnergy(b));
+  const cool = byEnergy.shift();     // gentlest song lands the class
+  const peak = byEnergy.pop();       // most explosive goes second-to-last
+  return [...byEnergy, peak, cool];  // the rest ramp up in between
+}
+function classTargetSec(){ return clamp(+store.classLen||45,10,120)*60; }
 function goalForPosition(i,n){
   if(n===1) return 'balanced';
-  if(i===0) return 'endurance';          // open easy, let legs arrive
   if(i===n-1) return 'cooldown';         // always land soft
-  const p = i/(n-1);
-  return p<0.4 ? 'balanced' : (p<0.85 ? 'high' : 'balanced');
+  if(i===n-2) return 'high';             // the big one, second to last
+  if(i===0) return 'endurance';          // open easy, let legs arrive
+  const p = i/(n-2);                     // how far through the body of the class
+  if(p<0.22) return 'endurance';         // warm up
+  if(p<0.55) return 'balanced';          // heating up
+  return 'high';                         // intense
 }
 function autoPlanClass(list,force){
   const ts = list || tracks(), n = ts.length;
@@ -1072,6 +1110,7 @@ function autoPlanClass(list,force){
     if(t.manual && !force){ recent = [...recent, t.opts && t.opts.style].slice(-2); return; }
     if(force) t.manual = false;
     const goal = goalForPosition(i,n);
+    const late = n<4 || i >= Math.floor(n*0.5);
     let o = quickPick(t,goal,0);
     // don't let the class repeat itself: skip a style used in either of the last two songs.
     // The substitute still has to suit the song — a race needs cadence to be a race, and a
@@ -1079,11 +1118,13 @@ function autoPlanClass(list,force){
     if(o.style!=='recover' && recent.includes(o.style)){
       const D = t.dur-(t.offset||0), bpm = t.bpm||120;
       const alt = ROTATION.filter(s=>!recent.includes(s)
-        && !(s==='race' && (goal!=='high' || bpm<120))
+        && !(s==='race' && (goal!=='high' || bpm<120 || !late))
         && !(s==='timetrial' && D>=300));
       if(alt.length) o = {style:alt[i%alt.length],goal};
     }
-    if(i===0 && o.style==='race') o.style = 'interval';
+    // A race always rides zones 3-4 whatever the goal says, so it belongs in the back
+    // half of the class, never as an opener or a warm-up song.
+    if(o.style==='race' && !late) o.style = 'interval';
     if(o.style==='interval'){
       const shapes = INTERVAL_SHAPES[goal] || INTERVAL_SHAPES.balanced;
       const [w,r] = shapes[ivN++ % shapes.length];
@@ -1289,8 +1330,16 @@ function renderTracks(){
   $('#tracks').innerHTML = ts.map(trackHTML).join('');
   $('#empty').hidden = ts.length>0;
   const total = ts.reduce((a,t)=>a+t.dur,0);
-  $('#totals').textContent = ts.length ? ts.length+(ts.length===1?' song':' songs')+', '+fmt(total) : '';
-  $('#btnStart').disabled = !ts.length; $('#btnQuickClass').disabled = !ts.length; $('#btnRank').disabled = ts.length<2;
+  if(!ts.length){ $('#totals').textContent = ''; }
+  else {
+    // never let a class quietly come in under the length it has to fill
+    const target = classTargetSec(), gap = target-total;
+    const base = ts.length+(ts.length===1?' song':' songs')+', '+fmt(total);
+    $('#totals').innerHTML = esc(base)+' &middot; '+(gap>30
+      ? '<span class="short">'+fmt(gap)+' short of '+store.classLen+' min</span>'
+      : '<span class="ok">covers '+store.classLen+' min</span>');
+  }
+  $('#btnStart').disabled = !ts.length; $('#btnQuickClass').disabled = !ts.length; $('#btnRank').disabled = ts.length<2; $('#btnArc').disabled = ts.length<3;
 }
 const byUid = uid => tracks().find(t=>t.uid===+uid);
 
@@ -1488,6 +1537,24 @@ $('#link').addEventListener('keydown',e=>{ if(e.key==='Enter') addLink(); });
 $('#btnSaveKey').onclick = ()=>{ store.apiKey = $('#apiKey').value.trim(); store.keyOK = false; setupForced = true; save(); syncSetupVis(); toast(store.apiKey?'Key saved. Run a search to check it.':'Key cleared.'); };
 $('#btnShowSetup').onclick = ()=>{ setupForced = true; syncSetupVis(); $('#settings').open = true; $('#settings').scrollIntoView({block:'nearest'}); };
 
+$('#classLen').onchange = ()=>{ store.classLen = clamp(+$('#classLen').value||45,10,120); $('#classLen').value = store.classLen; save(); renderTracks(); };
+$('#btnArc').onclick = ()=>{
+  const ts = tracks();
+  if(ts.length<3){ toast('Add at least three songs and the arc has something to shape.'); return; }
+  const ordered = arcOrder(ts);
+  ts.length = 0; ordered.forEach(t=>ts.push(t));
+  ts.forEach(t=>{ t.manual = false; });   // the arc owns the whole class
+  autoPlanClass(ts,true);
+  save(); renderTracks();
+  const total = totalDur(ts), target = classTargetSec();
+  const peak = ts[ts.length-2].title.slice(0,28);
+  if(total < target - 30){
+    const gap = target-total, more = Math.max(1,Math.round(gap/210));
+    toast('Arc built, peaking on '+peak+'. Still '+fmt(gap)+' short of '+store.classLen+' min — about '+more+' more song'+(more===1?'':'s')+'.');
+  } else {
+    toast('Arc built — builds to '+peak+' second-to-last, then cools down. '+fmt(total)+' for a '+store.classLen+'-minute class.');
+  }
+};
 // The class already plans itself on every change, so this button's job is now the reset:
 // it takes back the songs the instructor pinned by hand and rebuilds everything.
 $('#btnQuickClass').onclick = ()=>{
@@ -1910,6 +1977,26 @@ function showCreator(){
   $('#build').hidden = false; $('#library').hidden = true;
   $('#navCreator').classList.add('primary'); $('#navStart').classList.remove('primary');
 }
+// The Creator opens fresh. Once a draft has been saved as a playlist there's no reason to
+// keep staring at it here — it lives under Start Class and Load playlist. Work that has NOT
+// been saved is never thrown away: the check below only clears when the draft's songs match
+// a saved playlist exactly, so an in-progress playlist survives a stray tab click.
+function draftSongSig(list){ return (list||[]).map(t=>t.id).join('|'); }
+function draftIsSaved(){
+  if(!store.currentId) return false;
+  const p = store.playlists.find(x=>x.id===store.currentId);
+  if(!p) return false;
+  return draftSongSig(p.tracks) === draftSongSig(store.tracks) && store.tracks.length>0;
+}
+function freshenCreator(){
+  if(!store.tracks.length || !draftIsSaved()) return;
+  const name = ($('#plName').value||'').trim();
+  store.tracks = []; store.currentId = null;
+  $('#plName').value = ''; $('#plSavedNote').hidden = true;
+  save(); renderTracks();
+  toast(name ? '"'+name+'" is saved — starting fresh. Reopen it any time from Load playlist.'
+             : 'Starting fresh. Your saved playlists are under Load playlist.');
+}
 function showLibrary(){
   $('#build').hidden = true; $('#library').hidden = false;
   $('#navCreator').classList.remove('primary'); $('#navStart').classList.add('primary');
@@ -2038,7 +2125,7 @@ function exitRide(){
   activeList = null;
   if(cameFromLibrary){ save(); showLibrary(); } else { showCreator(); renderTracks(); }
 }
-$('#navCreator').onclick = showCreator;
+$('#navCreator').onclick = ()=>{ freshenCreator(); showCreator(); };
 $('#navStart').onclick = showLibrary;
 $('#btnSavePl').onclick = savePlaylist;
 $('#btnNewPl').onclick = newPlaylist;
@@ -2049,6 +2136,7 @@ $('#brandbar').innerHTML = $('#brandbar2').innerHTML = ZONES.map(z=>`<i style="b
 $('#apiKey').value = store.apiKey || '';
 syncSetupVis();
 $('#cLook').textContent = 'Look ahead '+store.look+'s';
+$('#classLen').value = store.classLen || 45;
 $('#timerMode').textContent = store.countUp?'Counting up':'Counting down';
 store.tracks.forEach(t=>{ if(!t.plan || !t.opts){ if(!t.opts) t.opts = quickPick(t,'balanced',0); rebuild(t); } });
 autoPlanClass(store.tracks); save();   // persist the arc so what's shown is what's stored
