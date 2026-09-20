@@ -112,7 +112,7 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 #totals{color:var(--muted);font-size:14px}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 16px}
 #tracks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
-.track{display:grid;grid-template-columns:112px minmax(0,1fr) auto;gap:14px;background:var(--card-grad);border:1px solid var(--card-border);border-left:4px solid var(--line);border-radius:16px;padding:12px;align-items:start;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease;box-shadow:var(--shadow-sm)}
+.track{position:relative;display:grid;grid-template-columns:112px minmax(0,1fr) auto;gap:14px;background:var(--card-grad);border:1px solid var(--card-border);border-left:4px solid var(--line);border-radius:16px;padding:12px;align-items:start;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease;box-shadow:var(--shadow-sm)}
 .track:hover{border-color:#3a4560}
 .track[data-level="1"]{--lvl:var(--z0)}
 .track[data-level="2"]{--lvl:var(--z1)}
@@ -121,8 +121,14 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .track[data-level="5"]{--lvl:var(--z4)}
 .track[data-level]{border-left-color:var(--lvl)}
 .track.dragging{transition:none;z-index:6;box-shadow:0 14px 36px rgba(0,0,0,.55);cursor:grabbing}
+.track.dragging .tnum{opacity:.25}
+@keyframes justmoved{0%{box-shadow:0 0 0 2px var(--lvl,#4a5872),0 10px 28px rgba(0,0,0,.45)}100%{box-shadow:var(--shadow-sm)}}
+.track.justmoved{animation:justmoved .75s ease-out}
+.tnum{position:absolute;top:8px;left:8px;z-index:2;min-width:22px;height:22px;padding:0 6px;border-radius:999px;background:rgba(9,12,20,.82);border:1px solid var(--card-border);color:var(--text);font-size:13px;font-weight:700;line-height:20px;text-align:center;pointer-events:none;transition:opacity .15s ease}
 .tgrip{cursor:grab;touch-action:none;user-select:none;display:flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line);border-radius:6px;color:var(--muted);font-size:15px;letter-spacing:1px;padding:1px 8px;line-height:1}
 .tgrip:hover{color:var(--text);border-color:#4a5872}
+.tgrip:focus-visible{outline:none;color:var(--text);border-color:#63d471;box-shadow:0 0 0 3px rgba(99,212,113,.25)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .thumb{width:112px;height:63px;object-fit:cover;border-radius:8px;background:#000;box-shadow:0 2px 10px rgba(0,0,0,.4)}
 .ttitle{font-weight:700;line-height:1.25;margin-bottom:6px}
 .tmash{font-size:13px;color:var(--muted);margin:-4px 0 8px;line-height:1.4}
@@ -467,6 +473,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 </dialog>
 
 <div id="toast" hidden></div>
+<div id="reorderLive" class="sr-only" role="status" aria-live="polite"></div>
 
 <script>
 (() => {
@@ -1256,6 +1263,7 @@ function trackHTML(t,i){
     ? `<span title="Work / recover, in seconds">${t.opts.workSec}s on &middot; ${t.opts.restSec}s off</span>` : '';
   const tip = t.bpmSrc==='guess' ? 'Estimated from genre. Check it.' : (t.bpmSrc==='title' ? 'Found in the title' : 'Set by you');
   return `<li class="track" data-uid="${t.uid}" data-level="${e.level}">
+    <span class="tnum" aria-hidden="true">${i+1}</span>
     <img class="thumb" src="${esc(t.thumb)}" alt="" loading="lazy">
     <div class="tmain">
       <div class="ttitle">${esc(t.title)}</div>
@@ -1272,7 +1280,7 @@ function trackHTML(t,i){
       <button class="btn" data-act="quick">Quick build</button>
       <button class="btn" data-act="custom">Custom</button>
       ${t.manual?'<button class="mini" data-act="auto" title="Hand this song back to the automatic class plan">Back to auto</button>':''}
-      <div class="grp"><button class="tgrip" type="button" aria-label="Drag to reorder" title="Press and hold to drag">⠿</button><button class="mini" data-act="del" aria-label="Remove">Remove</button></div>
+      <div class="grp"><button class="tgrip" type="button" aria-label="Reorder ${esc(t.title)}, position ${i+1} of ${tracks().length}. Drag, or press the up and down arrow keys." title="Drag to reorder — or focus it and press ↑ / ↓">⠿</button><button class="mini" data-act="del" aria-label="Remove">Remove</button></div>
     </div>
   </li>`;
 }
@@ -1306,15 +1314,43 @@ $('#tracks').addEventListener('change',e=>{
   t.bpm = clamp(Math.round(+e.target.value||t.bpm),60,200); t.bpmSrc = 'manual'; rebuild(t); save(); renderTracks();
 });
 
-// ---------- drag-to-reorder (press-and-hold on touch, click-and-drag on desktop) ----------
+// ---------- drag-to-reorder (click-drag on desktop, press-and-hold on touch, arrow keys on the grip) ----------
 (function(){
   const list = $('#tracks');
-  const GAP = 12; // matches #tracks{gap:12px}
-  let drag = null;
+  const GAP = 12;        // matches #tracks{gap:12px}
+  const EDGE = 90;       // px from the window edge where auto-scroll kicks in
+  const MAXSCROLL = 20;  // px per frame at the very edge
+  let drag = null, raf = 0;
+
+  const docY = cy => cy + window.scrollY;
+  const announce = msg => { const el = $('#reorderLive'); if(el) el.textContent = msg; };
+
+  // The one place a track actually changes position — drag and keyboard both land here.
+  // Re-plans the class (the arc follows the new order), flashes the card that moved, and
+  // for a keyboard move keeps focus on the grip that was just used.
+  function moveTrack(from, to, why){
+    const ts = tracks();
+    to = clamp(to, 0, ts.length-1);
+    if(from < 0 || to === from) return;
+    const [moved] = ts.splice(from, 1);
+    ts.splice(to, 0, moved);
+    autoPlanClass(ts);   // the arc follows the new order
+    save(); renderTracks();
+    const li = list.querySelector('.track[data-uid="'+moved.uid+'"]');
+    if(li) li.classList.add('justmoved');
+    if(why === 'key'){ const g = li && li.querySelector('.tgrip'); if(g) g.focus(); }
+    announce(moved.title + ' moved to position ' + (to+1) + ' of ' + ts.length + '.');
+  }
+
+  function stopAuto(){ if(raf){ cancelAnimationFrame(raf); raf = 0; } }
 
   function cleanup(){
-    if(drag && drag.items){
-      drag.items.forEach(el=>{ el.style.transform=''; el.classList.remove('dragging'); });
+    stopAuto();
+    if(drag){
+      if(drag.items) drag.items.forEach(el=>{ el.style.transform=''; el.classList.remove('dragging'); });
+      if(drag.handle && drag.pointerId != null && drag.handle.releasePointerCapture){
+        try{ drag.handle.releasePointerCapture(drag.pointerId); }catch(_){}
+      }
     }
     document.removeEventListener('pointermove', onMove);
     document.removeEventListener('pointerup', onUp);
@@ -1323,75 +1359,120 @@ $('#tracks').addEventListener('change',e=>{
     drag = null;
   }
 
-  function beginDrag(li, startY){
+  function beginDrag(li, handle, startDocY, pointerId, clientY){
     const items = Array.from(list.children);
     const draggedIndex = items.indexOf(li);
-    const rects = items.map(el=>el.getBoundingClientRect());
+    if(draggedIndex < 0) return cleanup();
+    // Geometry is measured once, in DOCUMENT coordinates, so the page can scroll
+    // mid-drag (see autoScroll) without the drop target drifting.
+    const sy = window.scrollY;
+    const rects = items.map(el=>{ const r = el.getBoundingClientRect(); return {top:r.top+sy, height:r.height}; });
     const others = items.map((_,i)=>i).filter(i=>i!==draggedIndex);
-    const mids = others.map(i=>rects[i].top + rects[i].height/2);
-    drag = {li, items, draggedIndex, draggedHeight: rects[draggedIndex].height, others, mids,
-      startY, baseCenter: rects[draggedIndex].top + rects[draggedIndex].height/2, insertIndex: draggedIndex, pending:false};
+    // Where the dragged card would come to rest for each possible drop slot, in the
+    // layout that exists once it is lifted out of the flow — then the halfway points
+    // between those rest positions are the thresholds. That is what makes it land in the
+    // slot it looks like it is in, dragging up or down, whatever height the rows are.
+    const dH = rects[draggedIndex].height;
+    let y = rects[0].top; const rest = [];
+    for(const i of others){ rest.push(y + dH/2); y += rects[i].height + GAP; }
+    rest.push(y + dH/2);
+    drag = {li, handle, pointerId, items, draggedIndex, draggedHeight: dH,
+      bounds: rest.slice(0,-1).map((g,j)=> (g + rest[j+1])/2),
+      startY: startDocY, baseCenter: rects[draggedIndex].top + dH/2,
+      dropIndex: draggedIndex, lastClientY: clientY, pending:false};
     li.classList.add('dragging');
     document.body.style.userSelect = 'none';
+    position();
   }
 
   function applyShifts(){
-    const shiftAmt = drag.draggedHeight + GAP;
+    const S = drag.draggedHeight + GAP, d = drag.draggedIndex, k = drag.dropIndex;
     drag.items.forEach((el,i)=>{
-      if(i===drag.draggedIndex) return;
-      let shift = 0;
-      if(drag.insertIndex > drag.draggedIndex && i>drag.draggedIndex && i<drag.insertIndex) shift = -shiftAmt;
-      else if(drag.insertIndex <= drag.draggedIndex && i>=drag.insertIndex && i<drag.draggedIndex) shift = shiftAmt;
-      el.style.transform = shift ? `translateY(${shift}px)` : '';
+      if(i===d) return;
+      const j = i < d ? i : i-1;            // this card's place once the dragged one is out
+      const shift = (i > d ? -S : 0) + (j >= k ? S : 0);
+      el.style.transform = shift ? 'translateY('+shift+'px)' : '';
     });
+  }
+
+  function position(){
+    if(!drag || drag.pending) return;
+    const dy = docY(drag.lastClientY) - drag.startY;
+    drag.li.style.transform = 'translateY('+dy+'px)';
+    const center = drag.baseCenter + dy;
+    let k = 0;
+    for(const b of drag.bounds){ if(center > b) k++; else break; }
+    if(k !== drag.dropIndex){ drag.dropIndex = k; applyShifts(); }
+  }
+
+  // Hold a card near the top or bottom of the window and the page scrolls, so a long
+  // playlist can be reordered end to end without letting go.
+  function autoScroll(){
+    raf = 0;
+    if(!drag || drag.pending) return;
+    const y = drag.lastClientY, h = window.innerHeight;
+    let v = 0;
+    if(y < EDGE) v = -MAXSCROLL * (1 - y/EDGE);
+    else if(y > h - EDGE) v = MAXSCROLL * (1 - (h-y)/EDGE);
+    if(!v) return;
+    const before = window.scrollY;
+    try{ window.scrollBy({top:v, left:0, behavior:'instant'}); }catch(_){ window.scrollBy(0, v); }
+    if(window.scrollY !== before) position();
+    raf = requestAnimationFrame(autoScroll);
   }
 
   function onMove(e){
     if(!drag) return;
-    if(drag.pending){
-      if(Math.abs(e.clientY - drag.startY) > 8) cleanup();
+    if(drag.pending){                       // a touch that moves before the hold completes
+      if(Math.abs(e.clientY - drag.pendingClientY) > 8) cleanup();
       return;
     }
     e.preventDefault();
-    const dy = e.clientY - drag.startY;
-    drag.li.style.transform = `translateY(${dy}px)`;
-    const draggedCenter = drag.baseCenter + dy;
-    let insertPos = 0;
-    for(const mid of drag.mids){ if(draggedCenter > mid) insertPos++; else break; }
-    const insertIndex = insertPos < drag.others.length ? drag.others[insertPos] : drag.items.length;
-    if(insertIndex !== drag.insertIndex){ drag.insertIndex = insertIndex; applyShifts(); }
+    drag.lastClientY = e.clientY;
+    position();
+    if(!raf) raf = requestAnimationFrame(autoScroll);
   }
 
   function onUp(){
     if(!drag) return;
     if(drag.pending){ cleanup(); return; }
-    const {draggedIndex} = drag;
-    let finalIndex = clamp(drag.insertIndex > draggedIndex ? drag.insertIndex-1 : drag.insertIndex, 0, drag.items.length-1);
-    if(finalIndex !== draggedIndex){
-      const ts = tracks();
-      const [moved] = ts.splice(draggedIndex,1);
-      ts.splice(finalIndex,0,moved);
-      autoPlanClass(ts);   // the arc follows the new order
-      save();
-    }
+    const from = drag.draggedIndex, to = clamp(drag.dropIndex, 0, drag.items.length-1);
     cleanup();
-    renderTracks();
+    if(to !== from) moveTrack(from, to, 'drag');
   }
 
   list.addEventListener('pointerdown', e=>{
+    if(e.button != null && e.button !== 0) return;
     const handle = e.target.closest('.tgrip'); if(!handle) return;
     const li = handle.closest('.track'); if(!li) return;
     e.preventDefault();
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
     document.addEventListener('pointercancel', onUp);
-    if(e.pointerType==='touch'){
-      const startY = e.clientY;
-      drag = {pending:true, startY};
-      setTimeout(()=>{ if(drag && drag.pending){ beginDrag(li, startY); } }, 320);
+    if(handle.setPointerCapture){ try{ handle.setPointerCapture(e.pointerId); }catch(_){} }
+    if(e.pointerType === 'touch'){
+      const cy = e.clientY;
+      drag = {pending:true, pendingClientY:cy, handle, pointerId:e.pointerId};
+      setTimeout(()=>{ if(drag && drag.pending) beginDrag(li, handle, docY(cy), e.pointerId, cy); }, 320);
     } else {
-      beginDrag(li, e.clientY);
+      beginDrag(li, handle, docY(e.clientY), e.pointerId, e.clientY);
     }
+  });
+
+  // Keyboard reorder: tab to a grip, then Up/Down moves the song and Home/End send it to
+  // the ends. Covers what the old Up/Down buttons used to do, without the buttons.
+  list.addEventListener('keydown', e=>{
+    const handle = e.target.closest && e.target.closest('.tgrip'); if(!handle) return;
+    const n = list.children.length;
+    const from = Array.from(list.children).indexOf(handle.closest('.track'));
+    let to = null;
+    if(e.key === 'ArrowUp') to = from - 1;
+    else if(e.key === 'ArrowDown') to = from + 1;
+    else if(e.key === 'Home') to = 0;
+    else if(e.key === 'End') to = n - 1;
+    else return;
+    e.preventDefault();
+    moveTrack(from, to, 'key');
   });
 })();
 $('#results').addEventListener('click',e=>{
