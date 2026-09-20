@@ -1382,6 +1382,7 @@ function renderTracks(){
       : '<span class="ok">covers '+store.classLen+' min</span>');
   }
   $('#btnStart').disabled = !ts.length; $('#btnQuickClass').disabled = !ts.length; $('#btnRank').disabled = ts.length<2; $('#btnArc').disabled = ts.length<3;
+  if(recsOpen) showRecs();   // suggestions track the class as it changes
 }
 const byUid = uid => tracks().find(t=>t.uid===+uid);
 
@@ -1597,7 +1598,7 @@ $('#btnArc').onclick = ()=>{
     toast('Arc built — builds to '+peak+' second-to-last, then cools down. '+fmt(total)+' for a '+store.classLen+'-minute class.');
   }
 };
-let lastRecs = [], recsOpen = false;
+var lastRecs = [], recsOpen = false;   // var: renderTracks reads recsOpen and runs before this line
 function recsHeadline(ts){
   if(!ts.length) return 'Nothing in the class yet — here are a few to start it with.';
   const gap = classTargetSec()-totalDur(ts);
@@ -1629,9 +1630,8 @@ $('#btnSuggest').onclick = ()=>{
 $('#recs').addEventListener('click', e=>{
   const b = e.target.closest('[data-addrec]'); if(!b) return;
   const r = lastRecs[+b.dataset.addrec]; if(!r) return;
-  addMashup(r.entry);                 // adds, re-plans the class and re-renders
   b.textContent = 'Added'; b.disabled = true;
-  setTimeout(showRecs, 400);          // refresh: the gap and the picks have both moved
+  addMashup(r.entry);   // adds, re-plans the class, re-renders, and refreshes this panel
 });
 // The class already plans itself on every change, so this button's job is now the reset:
 // it takes back the songs the instructor pinned by hand and rebuilds everything.
