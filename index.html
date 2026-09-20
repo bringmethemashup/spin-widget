@@ -1355,6 +1355,21 @@ function ensureMashupAudio(){
   mashupAudio.addEventListener('pause', ()=>{ syncPlayBtn(2); });
   return mashupAudio;
 }
+// pCloud's CDN occasionally stalls mid-load (confirmed live: loadstart fires, then
+// nothing — no error, no data, ever) which otherwise hangs silently forever since
+// a.play()'s promise doesn't reject for a stall, it just never resolves. This is
+// very likely the real cause behind "music isn't playing" reports. A short watchdog
+// catches that case and retries once with a freshly-resolved URL.
+function waitForAudioReady(a, ms){
+  return new Promise(resolve=>{
+    let done = false;
+    const finish = ok => { if(done) return; done = true; clearTimeout(timer); a.removeEventListener('loadeddata',onReady); a.removeEventListener('canplay',onReady); resolve(ok); };
+    const onReady = () => finish(true);
+    const timer = setTimeout(()=>finish(a.readyState>0), ms);
+    a.addEventListener('loadeddata', onReady);
+    a.addEventListener('canplay', onReady);
+  });
+}
 async function playMashupAudio(t, retried){
   const a = ensureMashupAudio();
   if(!t.audioLink){ toast('This mashup has no audio file linked yet.'); return; }
@@ -1362,7 +1377,13 @@ async function playMashupAudio(t, retried){
     const url = await resolvePcloudUrl(t.audioLink, !!retried);
     if(tracks()[cur]!==t) return;
     a.src = url;
-    await a.play();
+    a.play().catch(()=>{});
+    const ready = await waitForAudioReady(a, 6000);
+    if(tracks()[cur]!==t) return;
+    if(!ready){
+      if(!retried){ invalidatePcloud(t.audioLink); return playMashupAudio(t, true); }
+      toast('This mashup’s audio is stuck loading — try Next then Prev, or reload the page.');
+    }
   }catch(err){
     if(!retried){ invalidatePcloud(t.audioLink); return playMashupAudio(t, true); }
     toast('Could not play this mashup’s audio.');
