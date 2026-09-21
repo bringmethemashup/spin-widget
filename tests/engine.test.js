@@ -148,17 +148,32 @@ check('guessMeta reads a bpm out of a title when there is one', () => {
   eq(guessMeta('Some Banger 128 BPM', '').bpm, 128);
   eq(guessMeta('No numbers here', '').bpmSrc, 'guess');
 });
+check('quickPick offers real variety for the common mid-tempo case, not just pyramid every time', () => {
+  // This bucket (100-140bpm, under 5 minutes, not dance) used to fall through to a single
+  // hardcoded default and pyramid ate almost every song in a real class.
+  const styles = new Set();
+  for(let uid=0; uid<9; uid++) styles.add(quickPick(song({ uid, bpm:120, dur:220, genre:'Pop' }),'balanced',0).style);
+  ok(styles.size >= 3, 'expected pyramid/climb/interval variety, got only: '+[...styles].join(','));
+});
+check('a custom plan uses exactly the blocks given, in order, with no engine reinterpretation', () => {
+  const customSegs = [{z:0,dur:20},{z:2,dur:40},{z:4,dur:15}];
+  const p = buildPlan(song({ dur:999 }), { style:'custom', customSegs });
+  eq(p.segs.map(s=>s.z), [0,2,4], 'zones should match exactly what was set, in order');
+  eq(p.D, 75, 'total duration should be the sum of the blocks, not the song length');
+  eq(p.segs.map(s=>s.end), [20,60,75], 'block boundaries should land exactly where set');
+});
 
 // ---------- the automatic class arc ----------
-check('the class opens easy and always lands on a cool down', () => {
+check('the class opens with a real warm up and always lands on a cool down', () => {
   for(const n of [2,3,5,8,13,20]){
     eq(goalForPosition(n-1, n), 'cooldown', n+' songs: the last song must be a cool down');
     eq(goalForPosition(n-2, n), 'high', n+' songs: the second-to-last song is the big one');
-    if(n > 3) eq(goalForPosition(0, n), 'endurance', n+' songs: the opener should be easy');
+    if(n > 3) eq(goalForPosition(0, n), 'cooldown', n+' songs: the opener should be a real warm up, mostly white/blue');
+    if(n >= 6) eq(goalForPosition(1, n), 'endurance', n+' songs: the second song should still be easing in');
   }
 });
 check('goals only ever ramp upward through the body of the class', () => {
-  const rank = { endurance:0, balanced:1, high:2 };
+  const rank = { cooldown:-1, endurance:0, balanced:1, high:2 };
   const n = 16;
   const body = Array.from({length:n-2}, (_,i) => rank[goalForPosition(i, n)]);
   body.forEach((v,i) => { if(i) ok(v >= body[i-1], 'intensity dipped at position '+i+': '+body.join(',')); });
@@ -209,6 +224,18 @@ check('a race is never used as an opener or a warm-up song', () => {
       if(t.opts.style === 'race') ok(i >= Math.floor(n*0.5), n+' songs: a race landed at position '+i+', in the first half');
     });
   }
+});
+check('whatever follows a race is a real cool down, not whatever position alone would pick', () => {
+  let sawRace = false;
+  for(const n of [11, 13, 20]){
+    const ts = planned(n, { dur:300, bpm:150, genre:'Techno' });
+    ts.forEach((t,i) => {
+      if(i===0 || ts[i-1].opts.style !== 'race') return;
+      sawRace = true;
+      eq(t.opts.goal, 'cooldown', n+' songs: song after a race should be a cool down, got '+t.opts.goal+'/'+t.opts.style);
+    });
+  }
+  ok(sawRace, 'fixture produced no race to check the follow-up song against');
 });
 check('a high-intensity sweep spends its time up top, not back down in the easy zones', () => {
   // A climb is allowed a short Recover tail after the summit; what matters is that the song
