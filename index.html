@@ -902,6 +902,67 @@ function loadMashupCatalog(){
   });
   return mashupCatalogPromise;
 }
+// ---------- cross-device playlist sync ----------
+// Playlists used to live only in this browser's localStorage, so a playlist built on
+// a laptop never showed up on a phone. This mirrors them into a `spin_playlists` table
+// in the same Supabase project the mashup catalog already reads from — same project,
+// separate table, deliberately open to anon (no login exists in this widget at all;
+// Ian accepted the same public-exposure trade-off the catalog already has).
+// Conflict rule is plain last-write-wins by `updatedAt`, which is fine for one person
+// on a couple of devices — no attempt at real multi-writer merging.
+const SPIN_SYNC_URL = MASHUP_SUPABASE_URL+'/rest/v1/spin_playlists';
+const SPIN_SYNC_HEADERS = { apikey: MASHUP_SUPABASE_ANON_KEY, Authorization: 'Bearer '+MASHUP_SUPABASE_ANON_KEY };
+async function cloudFetchPlaylists(){
+  const r = await fetch(SPIN_SYNC_URL+'?select=id,data,updated_at', { headers: SPIN_SYNC_HEADERS });
+  if(!r.ok) throw new Error('spin_playlists fetch failed: '+r.status);
+  return r.json(); // [{id,data,updated_at}]
+}
+async function cloudPushPlaylist(p){
+  try{
+    await fetch(SPIN_SYNC_URL, {
+      method: 'POST',
+      headers: Object.assign({}, SPIN_SYNC_HEADERS, {
+        'Content-Type': 'application/json',
+        'Prefer': 'resolution=merge-duplicates'
+      }),
+      body: JSON.stringify({ id: p.id, data: p, updated_at: new Date(p.updatedAt).toISOString() })
+    });
+  }catch(e){ console.warn('Playlist sync (push) failed, staying local for now', e); }
+}
+async function cloudDeletePlaylist(id){
+  try{
+    await fetch(SPIN_SYNC_URL+'?id=eq.'+encodeURIComponent(id), { method:'DELETE', headers: SPIN_SYNC_HEADERS });
+  }catch(e){ console.warn('Playlist sync (delete) failed', e); }
+}
+// Runs once at startup. Merges the cloud list into store.playlists by id, newest
+// updatedAt wins per playlist; anything local-only or locally newer gets pushed back up
+// so the cloud catches up too. Silently gives up on any network failure — the app
+// already works fully offline off its localStorage cache, this is a bonus sync layer,
+// never a requirement to function.
+async function syncPlaylistsWithCloud(){
+  let rows;
+  try{ rows = await cloudFetchPlaylists(); }
+  catch(e){ console.warn('Playlist sync (fetch) failed, staying on local copy', e); return; }
+  const byId = new Map(store.playlists.map(p=>[p.id,p]));
+  const toPush = [];
+  for(const row of rows){
+    const cloudP = row.data; if(!cloudP || !cloudP.id) continue;
+    const localP = byId.get(cloudP.id);
+    if(!localP){ byId.set(cloudP.id, cloudP); }
+    else if((cloudP.updatedAt||0) > (localP.updatedAt||0)){ byId.set(cloudP.id, cloudP); }
+    else if((localP.updatedAt||0) > (cloudP.updatedAt||0)){ toPush.push(localP); }
+  }
+  const cloudIds = new Set(rows.map(r=>r.id));
+  for(const p of store.playlists){ if(!cloudIds.has(p.id)) toPush.push(p); }
+  const merged = Array.from(byId.values());
+  const changed = merged.length !== store.playlists.length ||
+    merged.some(p=>{ const l = store.playlists.find(x=>x.id===p.id); return !l || l.updatedAt !== p.updatedAt; });
+  store.playlists = merged;
+  save();
+  toPush.forEach(cloudPushPlaylist);
+  if(changed && !$('#library').hidden) renderLibrary();
+  if(changed && !$('#loadPlMenu').hidden) renderLoadMenu();
+}
 function mashupLabel(entry){
   return (entry.sourceSongs && entry.sourceSongs.length) ? entry.sourceSongs.map(s=>s.artist+' – '+s.title).join(' x ') : (entry.displayTitle||'');
 }
@@ -2533,6 +2594,7 @@ $('#plList').addEventListener('click', e=>{
       store.playlists = store.playlists.filter(x=>x.id!==b.dataset.del);
       if(store.currentId===b.dataset.del) store.currentId = null;
       save(); renderLibrary();
+      cloudDeletePlaylist(b.dataset.del);
     }
   }
 });
@@ -2563,12 +2625,13 @@ function savePlaylist(){
   const snapshot = JSON.parse(JSON.stringify(store.tracks)); // decouple from the live draft
   if(store.currentId){
     const p = store.playlists.find(x=>x.id===store.currentId);
-    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; clearThemeAfterSave(); save(); $('#plName').value = name; showSavedNote('Saved "'+name+'" at '+saveTimeStr()); showSavedBar(name); return; }
+    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; clearThemeAfterSave(); save(); $('#plName').value = name; showSavedNote('Saved "'+name+'" at '+saveTimeStr()); showSavedBar(name); cloudPushPlaylist(p); return; }
   }
   const p = {id:plId(), name, tracks:snapshot, createdAt:now, updatedAt:now};
   store.playlists.push(p); store.currentId = p.id; clearThemeAfterSave(); save(); $('#plName').value = name;
   showSavedNote('Saved "'+name+'" at '+saveTimeStr());
   showSavedBar(name);
+  cloudPushPlaylist(p);
 }
 function newPlaylist(){
   store.tracks = []; store.currentId = null; $('#plName').value = ''; $('#plSavedNote').hidden = true; save(); renderTracks();
@@ -2630,8 +2693,15 @@ function exitRide(){
   $('#ride').hidden = true;
   $('#ride').classList.remove('edgehot');
   const cameFromLibrary = activeOrigin==='library';
+  const riddenList = activeList;
   activeList = null;
-  if(cameFromLibrary){ save(); showLibrary(); } else { showCreator(); renderTracks(); }
+  if(cameFromLibrary){
+    save(); showLibrary();
+    // Riding a saved playlist can quietly correct it in place (e.g. a mashup's real
+    // duration learned mid-class) — push that back up so other devices see it too.
+    const p = riddenList && store.playlists.find(x=>x.tracks===riddenList);
+    if(p) cloudPushPlaylist(p);
+  } else { showCreator(); renderTracks(); }
 }
 $('#navCreator').onclick = ()=>{ freshenCreator(); showCreator(); };
 $('#navStart').onclick = showLibrary;
@@ -2697,6 +2767,7 @@ if(store.currentId){ const p = store.playlists.find(x=>x.id===store.currentId); 
 showLibrary();
 renderTracks();
 loadYT();
+syncPlaylistsWithCloud();
 })();
 </script>
 </body>
