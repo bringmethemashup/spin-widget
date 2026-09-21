@@ -152,6 +152,13 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .newform input[type=text]{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--text);font:inherit}
 .newform .flab em{color:var(--muted);font-style:normal;font-weight:500}
 .newacts{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+.statsform .zrow{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.statsform .zrow .zsw{width:14px;height:14px;border-radius:4px;flex:0 0 auto}
+.statsform .zrow .zname{width:64px;font-weight:700;flex:0 0 auto}
+.statsform .zrow .zbarwrap{flex:1;background:var(--panel2);border-radius:8px;overflow:hidden;height:10px}
+.statsform .zrow .zbarfill{height:100%;border-radius:8px 0 0 8px}
+.statsform .zrow .zpct{width:38px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.statsform .zrow .ztime{width:56px;text-align:right;font-variant-numeric:tabular-nums;font-weight:700}
 #btnNewPl2{background:linear-gradient(180deg,#2fd07a,#1eb767);color:#06210f;border:0;font-weight:800}
 #btnNewPl2:hover{background:#2fd07a;color:#06210f}
 #recs{display:flex;flex-direction:column;gap:8px;margin:12px 0 4px;padding:14px;border:1px dashed var(--card-border);border-radius:14px;background:rgba(255,255,255,.02)}
@@ -467,6 +474,17 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     <div class="newacts">
       <button type="button" class="btn" id="nCancel">Cancel</button>
       <button type="button" class="btn primary spectrum" id="nGo">Start building</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="statsDlg">
+  <div class="newform statsform">
+    <h3>Class complete</h3>
+    <p class="note" id="statsTotal">Nice work, class.</p>
+    <div id="statsBars"></div>
+    <div class="newacts">
+      <button type="button" class="btn primary spectrum" id="statsDone">Done</button>
     </div>
   </div>
 </dialog>
@@ -2017,6 +2035,11 @@ async function playMashupAudio(t, stage){
 
 // ---------- ride view ----------
 let player = null, ytOK = false, cur = -1, anchor = {t:0,at:0}, lastIdx = -2, raf = 0, ended = false;
+// Real time-in-zone for the end-of-class stats screen: keyed by zone index (0-4) plus 'race'
+// for the full-spectrum race style, which isn't really any one color. Accumulated in frame()
+// from actual wall-clock time while something is genuinely playing, so pauses, replays and
+// skipped songs are all reflected honestly rather than assumed from the plan.
+let zoneTime = {}, statsLastAt = null, statsShown = false;
 const hw = $('#hw'), hwInner = $('#hwInner');
 let pps = 4, nowY = 200, cdLast = null, spectrumOn = false;
 const cache = {};
@@ -2081,6 +2104,7 @@ async function startClass(from){
   const ts = tracks(); if(!ts.length) return;
   showRide();
   cur = clamp(from||0,0,ts.length-1); ended = false;
+  zoneTime = {}; statsLastAt = null; statsShown = false;
   await goToCurrent();
 }
 async function goToCurrent(){
@@ -2171,10 +2195,11 @@ function frame(){
   if(total>0){ const cpf = $('#classProgressFill'); if(cpf) cpf.style.width = (clamp((before+Math.min(time,t.dur))/total,0,1)*100)+'%'; }
 
   const card = $('#zoneCard'), callout = $('#callout');
-  let idx = -1;
+  let idx = -1, curZoneKey = null;
   if(p>=0){ idx = segs.findIndex(s=>p>=s.start && p<s.end); if(idx<0) idx = segs.length-1; }
   if(idx>=0){
     const seg = segs[idx], z = ZONES[seg.z], next = segs[idx+1];
+    curZoneKey = seg.race ? 'race' : seg.z;
     const remain = Math.max(0,seg.end-p), elapsed = Math.max(0,p-seg.start);
     if(idx!==lastIdx){
       setSpectrum(!!seg.race);
@@ -2213,6 +2238,7 @@ function frame(){
     // neutral "get ready" screen. Matches the white lead-in already shown in the build
     // view's strip.
     const first = segs[0], fz = ZONES[first.z], lead = ZONES[0];
+    curZoneKey = 0;
     if(lastIdx!==-1){ lastIdx = -1;
       card.classList.remove('flash'); hwInner.querySelectorAll('.hwseg').forEach(el=>el.classList.remove('past')); }
     setSpectrum(false);
@@ -2227,10 +2253,43 @@ function frame(){
     setText('calloutText','Next: '+(first.race?'Race':fz.name)+' in '+fmtDown(-p));
     hwInner.style.transform = 'translateY('+(nowY-(plan.D-p)*pps)+'px)';
   }
-  if(ended && !playingNow){ setSpectrum(false); setCountdown(null); setZoneName('Done'); setText('zoneLabel','Nice work, class.'); }
-}
+  // Real time-in-zone, from actual wall-clock elapsed while genuinely playing — not the plan.
+  // Clamped so a backgrounded tab's huge rAF gap doesn't get counted as ride time.
+  if(playingNow && curZoneKey!=null && statsLastAt!=null){
+    const dt = Math.min(now-statsLastAt, 2000);
+    if(dt>0) zoneTime[curZoneKey] = (zoneTime[curZoneKey]||0) + dt/1000;
+  }
+  statsLastAt = now;
 
-$('#btnStart').onclick = ()=>{ activeList = null; activeOrigin = 'build'; startClass(0); };
+  if(ended && !playingNow){
+    setSpectrum(false); setCountdown(null); setZoneName('Done'); setText('zoneLabel','Nice work, class.');
+    if(!statsShown){ statsShown = true; showClassStats(); }
+  }
+}
+const STATS_ZONE_ORDER = [0,1,2,3,4,'race'];
+const STATS_ZONE_LABEL = {0:'White',1:'Blue',2:'Green',3:'Yellow',4:'Red',race:'Race'};
+function statsZoneColor(k){ return k==='race' ? 'linear-gradient(90deg,#2f7dff,#8bdb1f,#ffd21f,#ff3b3b)' : ZONES[k].color; }
+// Shown automatically when the last song finishes. Built from zoneTime (real elapsed time
+// while playing), not the plan — a skipped intro, a paused stretch or a replayed song all
+// come out the way they actually happened, not the way the class was planned.
+function showClassStats(){
+  const total = STATS_ZONE_ORDER.reduce((a,k)=>a+(zoneTime[k]||0),0);
+  $('#statsTotal').textContent = total>0
+    ? 'You rode for '+fmt(total)+', across '+tracks().length+' song'+(tracks().length===1?'':'s')+'.'
+    : 'No ride time was recorded for this class.';
+  const rows = STATS_ZONE_ORDER.filter(k=>(zoneTime[k]||0) > 0.5);
+  $('#statsBars').innerHTML = rows.length ? rows.map(k=>{
+    const secs = zoneTime[k]||0, pct = total>0 ? Math.round(secs/total*100) : 0;
+    const bg = statsZoneColor(k);
+    return `<div class="zrow"><span class="zsw" style="background:${bg}"></span><span class="zname">${STATS_ZONE_LABEL[k]}</span>`
+      + `<span class="zbarwrap"><span class="zbarfill" style="width:${pct}%;background:${bg}"></span></span>`
+      + `<span class="zpct">${pct}%</span><span class="ztime">${fmt(secs)}</span></div>`;
+  }).join('') : '';
+  $('#statsDlg').showModal();
+}
+$('#statsDone').onclick = ()=>{ $('#statsDlg').close(); exitRide(); };
+
+$('#btnStart').onclick = ()=>{ activeList = null; activeOrigin = 'build'; clearTheme(); startClass(0); };
 $('#cPrev').onclick = ()=>{ if(cur>=0) prevTrack(); };
 $('#cNext').onclick = ()=>{ if(cur>=0 && cur<tracks().length-1) nextTrack(); };
 $('#cPlay').onclick = ()=>{
@@ -2301,6 +2360,7 @@ function freshenCreator(){
   const name = ($('#plName').value||'').trim();
   store.tracks = []; store.currentId = null;
   $('#plName').value = ''; $('#plSavedNote').hidden = true;
+  clearTheme(); // the saved playlist is done being built — its theme shouldn't steer the next one
   save(); renderTracks();
   toast(name ? '"'+name+'" is saved — starting fresh. Reopen it any time from Load playlist.'
              : 'Starting fresh. Your saved playlists are under Load playlist.');
@@ -2358,15 +2418,18 @@ function showSavedNote(text){
   savedNoteT = setTimeout(()=>{ el.hidden = true; }, 5000);
 }
 function saveTimeStr(){ return new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
-// A theme (set from New playlist) is meant to steer building THIS one playlist. Once it's
-// saved, the theme has done its job — clear it so it doesn't linger into whatever's built
-// next, and close the suggestions panel that went with it.
-function clearThemeAfterSave(){
+// A theme (set from New playlist) is meant to steer building THIS one playlist. Once you're
+// done with that playlist — saved it, started riding it, freshened the Creator, or loaded a
+// different one in — the theme has done its job. Clear it everywhere that can happen so it
+// never lingers into a playlist it was never meant to steer, and close the suggestions panel
+// that went with it.
+function clearTheme(){
   if(!store.theme && $('#recs').hidden) return;
   store.theme = ''; renderThemeChip();
   recsOpen = false; $('#btnSuggest').textContent = 'Suggest songs'; $('#recs').hidden = true;
   save();
 }
+const clearThemeAfterSave = clearTheme; // kept as an alias — same function, save() is one of several callers now
 function savePlaylist(){
   if(!store.tracks.length){ toast('Add some songs first.'); return; }
   const name = ($('#plName').value||'').trim() || 'Untitled playlist';
@@ -2390,6 +2453,7 @@ function loadPlaylistIntoCreator(id){
   store.tracks = JSON.parse(JSON.stringify(p.tracks));
   autoPlanClass(store.tracks);   // playlists saved before auto-planning pick up the arc on open
   store.currentId = p.id; $('#plName').value = p.name;
+  clearTheme(); // a leftover theme from whatever was being built before shouldn't steer this one
   save(); renderTracks(); showCreator();
   showSavedNote('Loaded "'+p.name+'"');
   closeLoadMenu();
@@ -2432,6 +2496,7 @@ function startSavedPlaylist(id){
   startClass(0);
 }
 function exitRide(){
+  if($('#statsDlg').open) $('#statsDlg').close();
   if(document.fullscreenElement) document.exitFullscreen();
   try{ player && player.pauseVideo(); }catch(e){}
   if(mashupAudio) mashupAudio.pause();
