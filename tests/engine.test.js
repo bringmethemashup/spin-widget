@@ -327,6 +327,54 @@ check('a bigger gap asks for more songs than a small one', () => {
   ok(many >= few, 'a short class should not be offered fewer songs than a full one');
 });
 
+// ---------- red cap, ring of fire / tunnel, time trial and race changes ----------
+check('a self-planned time trial never rides all red — it tops out at yellow', () => {
+  for(const dur of [120, 180, 240, 300]){
+    for(const bpm of [130, 150, 170]){
+      const p = buildPlan(song({dur,bpm}), {style:'timetrial', goal:'high'});
+      ok(Math.max(...p.segs.map(s=>s.z)) <= 3, dur+'s@'+bpm+'bpm: an unset time trial reached red');
+    }
+  }
+});
+check('a manually-set red time trial still gets the last-15s white cooldown tail', () => {
+  const p = buildPlan(song({dur:240,bpm:130}), {style:'timetrial', goal:'high', ttZone:4});
+  const last = p.segs[p.segs.length-1];
+  eq(last.z, 0, 'the final segment of a long time trial should be white');
+  ok(last.end - last.start <= 20 && last.end - last.start >= 10, 'the white tail should be roughly 15s, got '+(last.end-last.start).toFixed(1));
+});
+check('a long red segment gets capped into red, ring of fire, tunnel, then a drop back down', () => {
+  const p = buildPlan(song({dur:300,bpm:120}), {style:'timetrial', goal:'high', ttZone:4});
+  const reds = p.segs.filter(s=>s.z===4 && !s.effect);
+  reds.forEach(s => ok(s.end-s.start <= 35, 'a plain-red stretch ran '+(s.end-s.start).toFixed(1)+'s, expected it capped near 30s'));
+  const fire = p.segs.find(s=>s.effect==='fire'), tunnel = p.segs.find(s=>s.effect==='tunnel');
+  ok(fire, 'expected a ring-of-fire segment on a long red plan');
+  ok(tunnel, 'expected a tunnel segment on a long red plan');
+  ok(fire.end-fire.start <= 20, 'ring of fire should be capped near 15s');
+  ok(tunnel.end-tunnel.start <= 20, 'tunnel should be capped near 15s');
+  const afterTunnel = p.segs[p.segs.indexOf(tunnel)+1];
+  if(afterTunnel) ok(afterTunnel.z <= 1, 'after the tunnel it should drop back to a much lower color, got zone '+afterTunnel.z);
+});
+check('a short red stretch is left alone (nothing to cap)', () => {
+  const p = buildPlan(song({dur:60,bpm:120}), {style:'timetrial', goal:'high', ttZone:4});
+  ok(!p.segs.some(s=>s.effect), 'a short time trial should not trigger ring of fire / tunnel');
+});
+check('a race is one continuous spectrum segment for the whole song, no intervals', () => {
+  for(const dur of [120, 210, 300]){
+    const p = buildPlan(song({dur, bpm:150}), {style:'race', goal:'high'});
+    eq(p.segs.length, 1, 'a race should be a single segment');
+    ok(p.segs[0].race, 'the race segment should be flagged race');
+  }
+});
+check('interval cues are left to the instructor — no prescriptive voice lines', () => {
+  const p = buildPlan(song({dur:300,bpm:128}), {style:'interval', goal:'balanced'});
+  const cues = p.segs.map(s=>s.cue).filter(Boolean);
+  ok(!cues.some(c=>/find your rhythm|push!|ease off and breathe/i.test(c)), 'a removed coaching cue is still present: '+cues.join(', '));
+});
+check('a 20/10 interval shape is available for high-intensity songs', () => {
+  const shapes = INTERVAL_SHAPES.high.map(([w,r])=>w+'/'+r);
+  ok(shapes.includes('20/10'), 'expected a 20/10 shape in INTERVAL_SHAPES.high, got: '+shapes.join(', '));
+});
+
 // ---------- report ----------
 if(failures.length){
   console.error('\n  ' + failures.length + ' failing, ' + passed + ' passing\n');
