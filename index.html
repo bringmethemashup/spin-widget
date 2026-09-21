@@ -442,7 +442,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 </div>
 
 <dialog id="newDlg">
-  <form method="dialog" class="newform">
+  <div class="newform">
     <h3>Start a new class</h3>
     <p class="note">Set the shape of the ride and the suggestions will follow it. Both are optional — you can change them any time.</p>
     <label><span class="flab">Class length</span>
@@ -451,10 +451,10 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       <input id="nTheme" type="text" placeholder="Britney night, 2000s throwback, Halloween, divas..." autocomplete="off"></label>
     <p class="note">Suggestions will lean towards the theme across YouTube and your own mashups.</p>
     <div class="newacts">
-      <button class="btn" value="cancel">Cancel</button>
-      <button class="btn primary spectrum" id="nGo" value="go">Start building</button>
+      <button type="button" class="btn" id="nCancel">Cancel</button>
+      <button type="button" class="btn primary spectrum" id="nGo">Start building</button>
     </div>
-  </form>
+  </div>
 </dialog>
 
 <section id="ride" hidden>
@@ -2371,7 +2371,8 @@ function applyNewPlaylist(){
   renderThemeChip();
   recsOpen = true; $('#btnSuggest').textContent = 'Hide suggestions'; showRecs();
 }
-$('#nGo').onclick = ()=>{ setTimeout(applyNewPlaylist, 0); };   // after the dialog closes
+$('#nGo').onclick = ()=>{ $('#newDlg').close(); applyNewPlaylist(); };
+$('#nCancel').onclick = ()=>{ $('#newDlg').close(); };
 function renderThemeChip(){
   const el = $('#themeChip'); if(!el) return;
   el.hidden = !store.theme;
