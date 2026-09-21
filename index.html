@@ -10,7 +10,7 @@
 <style>
 :root{
   --ink:#0b0e14; --panel:#161b25; --panel2:#1e2532; --line:#2b3344; --text:#eef1f6; --muted:#98a4b8;
-  --z0:#f3f5f9; --z1:#2f7dff; --z2:#2fd07a; --z3:#ffd21f; --z4:#ff3b3b;
+  --z0:#f3f5f9; --z1:#2f7dff; --z2:#8bdb1f; --z3:#ffd21f; --z4:#ff3b3b;
   --disp:"Big Shoulders Display","Barlow Condensed","Arial Narrow",Impact,sans-serif;
   /* Same face "Bring Me The Mashup" uses everywhere, incl. its screensaver —
      now the widget's body font too, so it matches across both. */
@@ -271,9 +271,23 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #panel{display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:linear-gradient(180deg,#171d29,#12161f);border-left:1px solid var(--line);min-height:0;overflow:hidden}
 .np .nt{font-weight:700;font-size:clamp(15px,2.3vh,24px);line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .np .nm{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:clamp(12px,1.7vh,16px);margin-top:3px;font-variant-numeric:tabular-nums}
-.zonecard{border-radius:16px;padding:clamp(8px,1.5vh,18px) 16px;background:var(--z0);color:#10141b;transition:background-color .2s,color .2s,box-shadow .3s;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 10px 40px -10px var(--zone)}
-.zonename{font-family:var(--disp);font-weight:900;font-size:clamp(50px,11vh,140px);line-height:.88;letter-spacing:.01em;text-transform:uppercase;text-shadow:0 2px 0 rgba(255,255,255,.15)}
+.zonecard{border-radius:16px;padding:clamp(8px,1.5vh,18px) 16px;background:var(--z0);color:#10141b;transition:background-color .2s,color .2s,box-shadow .3s;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 10px 40px -10px var(--zone);text-align:center}
+.zonename{font-family:var(--disp);font-weight:900;font-size:clamp(50px,11vh,140px);line-height:.88;letter-spacing:.01em;text-transform:uppercase;text-shadow:0 2px 0 rgba(255,255,255,.15);white-space:nowrap;display:block}
 .zonelabel{font-weight:700;font-size:clamp(15px,2.5vh,28px);margin-top:.35em;line-height:1.15}
+.wtype{font-weight:700;font-size:clamp(12px,1.6vh,15px);color:#9fd0ff;margin-top:2px}
+/* ---- peak-red effects: capped bursts on top of a long red segment, not the whole thing ---- */
+.zonecard.fire,.zonecard.tunnel{position:relative;overflow:hidden;isolation:isolate}
+.zonecard.fire::before{content:"";position:absolute;inset:-30%;z-index:0;background:conic-gradient(from 0deg,#ff3b3b,#ff9d1f,#ffcf4d,#ff3b3b,#ff7a1f,#ff3b3b);filter:blur(28px);opacity:.75;animation:firespin 1.3s linear infinite,firepulse .35s ease-in-out infinite alternate}
+.zonecard.tunnel::before{content:"";position:absolute;inset:-60%;z-index:0;background:repeating-conic-gradient(#ff3b3b 0deg 10deg,#8a0000 10deg 20deg);opacity:.9;animation:tunnelspin 1s linear infinite}
+.zonecard.fire .zonename,.zonecard.fire .zonelabel,.zonecard.tunnel .zonename,.zonecard.tunnel .zonelabel{position:relative;z-index:1;text-shadow:0 2px 14px rgba(0,0,0,.7)}
+@keyframes firespin{to{transform:rotate(360deg)}}
+@keyframes firepulse{from{filter:blur(28px) brightness(1)}to{filter:blur(28px) brightness(1.3)}}
+@keyframes tunnelspin{to{transform:rotate(360deg)}}
+.strip i.fire{background:repeating-linear-gradient(45deg,#ff3b3b,#ff3b3b 4px,#ff9d1f 4px,#ff9d1f 8px)!important}
+.strip i.tunnel{background:repeating-linear-gradient(90deg,#ff3b3b,#ff3b3b 3px,#8a0000 3px,#8a0000 6px)!important}
+/* ---- whole-class progress bar, visible to the class ---- */
+#classProgress{position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(255,255,255,.08);z-index:17;pointer-events:none}
+#classProgress i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--z1),var(--z2),var(--z3),var(--z4));box-shadow:0 0 12px -1px rgba(255,255,255,.4);transition:width .3s linear}
 .zonecard.flash{animation:flash .45s ease-in-out 3}
 @keyframes flash{50%{filter:brightness(1.55) saturate(1.2);transform:scale(1.025)}}
 .timerrow{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
@@ -329,7 +343,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #nowLine span{position:absolute;right:8px;top:6px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);border-radius:4px;padding:1px 6px}
 .controls{display:flex;gap:6px;flex-wrap:wrap}
 .controls .btn{padding:7px 10px;font-size:clamp(12px,1.7vh,15px)}
-@media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum::before,.strip i.spec,.hwseg.spec,#cdLight.tick span{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
+@media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum::before,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
 </style>
 </head>
 <body>
@@ -409,9 +423,9 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
         <button class="btn" id="btnRank">Sort by difficulty</button>
         <button class="btn primary spectrum" id="btnStart">Start class</button>
       </div>
-      <div id="recs" hidden></div>
       <ol id="tracks"></ol>
       <div id="empty">Add songs from search or paste a link. The class plans itself as you go — easy opener, build, peak, cool down — and re-plans whenever you add, remove or reorder a song. Change any one song with Quick build or Custom and it stays exactly as you set it.</div>
+      <div id="recs" hidden></div>
     </div>
   </div>
 </section>
@@ -459,6 +473,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 
 <section id="ride" hidden>
   <div id="spectrumFrame" hidden></div>
+  <div id="classProgress" title="Progress through the whole class"><i id="classProgressFill"></i></div>
   <button id="rideExit" title="Exit class" aria-label="Exit class">&times;</button>
   <div id="stage"><div id="yt"></div><div id="cdLight" hidden aria-hidden="true"><span id="cdNum">5</span><em id="cdCue"></em></div><div id="mashupSaver" hidden>
     <div id="mashupArt"></div>
@@ -469,6 +484,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     <div class="np">
       <div class="nt" id="npTitle"></div>
       <div class="nm"><span id="npIdx"></span><span id="npClass"></span></div>
+      <div class="wtype" id="wType"></div>
     </div>
     <div class="zonecard" id="zoneCard">
       <div class="zonename" id="zoneName">Ready</div>
@@ -488,7 +504,12 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       <button class="btn" id="cPrev">Prev</button>
       <button class="btn" id="cPlay">Pause</button>
       <button class="btn" id="cNext">Next</button>
-      <button class="btn" id="cLook">Look ahead 90s</button>
+      <select class="btn" id="cLook" aria-label="Look ahead, in seconds — how far up the rolling bar shows what's coming">
+        <option value="45">Look ahead 45s</option>
+        <option value="90">Look ahead 90s</option>
+        <option value="150">Look ahead 150s</option>
+        <option value="240">Look ahead 240s</option>
+      </select>
       <button class="btn" id="cVidToggle" hidden>Show video</button>
       <button class="btn" id="cFull">Full screen</button>
       <button class="btn" id="cBack">Edit playlist</button>
@@ -543,7 +564,7 @@ const clamp = (v,a,b) => Math.min(b,Math.max(a,v));
 const ZONES = [
   {k:'white', name:'White',  feel:'Very light', color:'#f3f5f9', ink:'#10141b'},
   {k:'blue',  name:'Blue',   feel:'Light',      color:'#2f7dff', ink:'#ffffff'},
-  {k:'green', name:'Green',  feel:'Moderate',   color:'#2fd07a', ink:'#08120c'},
+  {k:'green', name:'Green',  feel:'Moderate',   color:'#8bdb1f', ink:'#0d1400'},
   {k:'yellow',name:'Yellow', feel:'Hard',       color:'#ffd21f', ink:'#191400'},
   {k:'red',   name:'Red',    feel:'Maximum',    color:'#ff3b3b', ink:'#ffffff'}
 ];
@@ -592,18 +613,47 @@ function mergeSteps(a){
   const out = [];
   for(const s of a){
     const p = out[out.length-1];
-    if(p && p.z===s.z && !!p.race === !!s.race){
+    if(p && p.z===s.z && !!p.race === !!s.race && (p.effect||'')===(s.effect||'')){
       p.u += s.u;
       if(/Cool|Final|Finish/.test(s.label)){ p.label = s.label; p.cue = s.cue; }
     } else out.push({...s});
   }
   return out;
 }
+// A sustained red segment is hard to hold: cap it around a minute. Past that, ride 30s of
+// regular red, then two 15s capped effects (ring of fire, then a tunnel), then drop back
+// down to a much lower color — never a whole song of unbroken red. Only kicks in on a red
+// segment that actually runs long (auto-planned intervals stay well under this on their own;
+// this exists for manually-set work times and time trials that hold red the whole song).
+function capRedSegments(steps,us){
+  const u30 = Math.max(1, Math.round(30/us));
+  const u15 = Math.max(1, Math.round(15/us));
+  const out = [];
+  for(const s of steps){
+    if(s.z===4 && !s.race && s.u*us > 60){
+      let left = s.u;
+      const mainU = Math.min(u30,left); left -= mainU;
+      out.push(stp(4,mainU,s.label,s.cue));
+      if(left>0){ const fu = Math.min(u15,left); left -= fu; const o = stp(4,fu,'Ring of fire',s.cue); o.effect='fire'; out.push(o); }
+      if(left>0){ const tu = Math.min(u15,left); left -= tu; const o = stp(4,tu,'Tunnel',s.cue); o.effect='tunnel'; out.push(o); }
+      if(left>0) out.push(stp(1,left,'Recover','Ease back down'));
+    } else out.push(s);
+  }
+  return out;
+}
 
 function tTimetrial(N,g,o,D){
   let z;
+  // A self-planned time trial never rides all red with this instructor — the hardest it
+  // plans on its own is yellow. Red is only possible if the instructor sets it herself.
   if(o.ttZone!==undefined && o.ttZone!==null && o.ttZone!=='') z = +o.ttZone;
-  else { z = Math.min(g.peak,3); if(g.peak>=4 && D<=210) z = 4; }
+  else z = Math.min(g.peak,3);
+  const us = N ? D/N : 20;
+  const tailU = Math.max(1, Math.round(15/us));
+  // The last 15 seconds drop back to white — a clear break before the next song starts.
+  if(N - tailU >= 2){
+    return [stp(z,N-tailU,'Time trial','Hold this color all song'), stp(0,tailU,'Recover','Catch your breath before the next song')];
+  }
   return [stp(z,N,'Time trial','Hold this color all song')];
 }
 function tInterval(N,g,o,us){
@@ -614,12 +664,14 @@ function tInterval(N,g,o,us){
   const cool = N>=12 ? 1 : 0;
   let left = N - warm - cool;
   const steps = [];
-  if(warm) steps.push(stp(Math.max(base,Math.min(2,peak-1)),warm,'Warm up','Find your rhythm'));
+  // No coaching-voice cues here — that's the instructor's call. The step labels (and the
+  // work/rest split shown on the card) are enough to follow along.
+  if(warm) steps.push(stp(Math.max(base,Math.min(2,peak-1)),warm,'Warm up',''));
   let n = 0;
   while(left>0){
     const w = Math.min(workU,left); n++;
-    steps.push(stp(peak,w,'Interval '+n,'Push!')); left -= w;
-    if(left>0){ const r = Math.min(restU,left); steps.push(stp(base,r,'Recover','Ease off and breathe')); left -= r; }
+    steps.push(stp(peak,w,'Interval '+n,'')); left -= w;
+    if(left>0){ const r = Math.min(restU,left); steps.push(stp(base,r,'Recover','')); left -= r; }
   }
   if(cool) steps.push(stp(base,cool,'Cool down','Spin it out'));
   if(n>=3 && (o.goal==='balanced'||o.goal==='high') && peak<4){
@@ -658,19 +710,9 @@ function tClimb(N,g){
   return steps;
 }
 function tRace(N){
-  let warm = N>=10 ? 2 : (N>=7 ? 1 : 0);
-  let fin = N>=8 ? 2 : 1;
-  let left = N - warm - fin;
-  if(left<0){ warm = 0; left = N - fin; }
-  const steps = [];
-  if(warm) steps.push(stp(2,warm,'Roll out','Get into position',true));
-  let n = 0;
-  while(left>0){
-    const y = Math.min(3,left); steps.push(stp(3,y,'Race pace','Hold your position',true)); left -= y;
-    if(left>0){ n++; steps.push(stp(4,1,'Attack '+n,'Attack!',true)); left -= 1; }
-  }
-  steps.push(stp(4,fin,'Final push','Sprint to the line!',true));
-  return steps;
+  // A race is just a glowing full-spectrum bar for the whole song — no zone intervals to
+  // call out, since the goal is to finish the distance, not hit a color.
+  return [stp(3,N,'Race','Race to the finish',true)];
 }
 function tRecover(N){
   const zs = N>=3 ? [2,1,0] : [1];
@@ -698,13 +740,16 @@ function buildPlan(t,o){
     case 'recover':   steps = tRecover(N); break;
     default:          steps = tInterval(N,g,o,us);
   }
+  // Time trials and intervals are the styles that can hold a flat red for a long stretch
+  // (a pyramid/climb/race already shape their own peak briefly by design).
+  if(style==='interval' || style==='timetrial') steps = capRedSegments(steps,us);
   steps = mergeSteps(steps);
   const total = steps.reduce((a,s)=>a+s.u,0);
   let acc = 0;
   const segs = steps.map((s,i)=>{
     const start = acc/total*D; acc += s.u;
     const end = i===steps.length-1 ? D : acc/total*D;
-    return {z:s.z,start,end,label:s.label,cue:s.cue,race:!!s.race};
+    return {z:s.z,start,end,label:s.label,cue:s.cue,race:!!s.race,effect:s.effect||null};
   });
   return {segs,D,off,unit:us,style,goal:o.goal||'balanced',N};
 }
@@ -1024,8 +1069,16 @@ const MashupSaver = (()=>{
     el.addEventListener('animationend', ()=>el.remove());
     b.appendChild(el);
   }
-  function startCrawl(){ stopCrawl(); spawn(); spawn(); crawlT = setInterval(spawn, 2400); }
-  function stopCrawl(){ clearInterval(crawlT); crawlT = 0; const b=box(); if(b) b.innerHTML=''; }
+  // The crawling clock line was set once at spawn and then just floated across the screen
+  // with whatever time it started with — it never actually advanced. Tick it live instead.
+  function tickTime(){
+    const b = box(); if(!b) return;
+    const el = b.querySelector('.ctime');
+    if(el) el.textContent = timeText();
+  }
+  let timeT = 0;
+  function startCrawl(){ stopCrawl(); spawn(); spawn(); crawlT = setInterval(spawn, 2400); timeT = setInterval(tickTime, 500); }
+  function stopCrawl(){ clearInterval(crawlT); crawlT = 0; clearInterval(timeT); timeT = 0; const b=box(); if(b) b.innerHTML=''; }
 
   function applyMontage(entry){
     const token = ++artToken;
@@ -1090,7 +1143,7 @@ let toastT;
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{el.hidden=true;},3600); }
 
 // ---------- state ----------
-const store = {tracks:[], apiKey:'', keyOK:false, countUp:true, look:90, playlists:[], currentId:null, classLen:45, theme:''};
+const store = {tracks:[], apiKey:'', keyOK:false, countUp:true, look:150, playlists:[], currentId:null, classLen:45, theme:''};
 function save(){ try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){} }
 function loadStore(){
   try{
@@ -1152,7 +1205,7 @@ function rebuild(t){ t.plan = buildPlan(t,t.opts); }
 const INTERVAL_SHAPES = {
   endurance: [[90,45],[120,60],[75,45]],
   balanced:  [[45,30],[60,30],[30,30],[75,45]],
-  high:      [[30,45],[20,20],[40,20],[25,35]]
+  high:      [[30,45],[20,20],[40,20],[25,35],[20,10]]
 };
 // ---------- arc-based playlist building ----------
 // Ian's shape: open easy, heat up, go intense, put the biggest most explosive song
@@ -1346,8 +1399,10 @@ function renderMashupResults(list, headNote){
   box.innerHTML = head + list.map((e,i)=>{
     const label = mashupLabelShort(e);
     const date = mashupDateStr(e);
-    const thumbSrc = (e.video && e.video.sourceId) ? ('https://i.ytimg.com/vi/'+e.video.sourceId+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
-    return `<div class="res"><img src="${esc(thumbSrc)}" alt="" loading="lazy"><div><div class="rt">${esc(e.displayTitle||label)}</div><div class="rc">${esc(label)}</div>${date?`<div class="rd">Uploaded ${esc(date)}</div>`:''}</div><button class="btn" data-addmash="${i}">Add</button></div>`;
+    const vid = e.video && e.video.sourceId;
+    const thumbSrc = vid ? ('https://i.ytimg.com/vi/'+vid+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
+    const watch = vid ? ` data-watch="${esc(vid)}" title="Click to preview on YouTube before adding" style="cursor:pointer"` : '';
+    return `<div class="res"><img src="${esc(thumbSrc)}" alt=""${watch} loading="lazy"><div><div class="rt">${esc(e.displayTitle||label)}</div><div class="rc">${esc(label)}</div>${date?`<div class="rd">Uploaded ${esc(date)}</div>`:''}</div><button class="btn" data-addmash="${i}">Add</button></div>`;
   }).join('');
 }
 async function showMashupRecent(){
@@ -1405,7 +1460,7 @@ async function doSearch(){
     lastResults = await apiVideos(ids);
     if(!store.keyOK){ store.keyOK = true; save(); }
     setupForced = false; syncSetupVis();
-    box.innerHTML = lastResults.map((v,i)=>`<div class="res"><img src="${esc(v.thumb)}" alt="" loading="lazy"><div><div class="rt">${esc(v.title)}</div><div class="rc">${esc(v.channel)}, ${fmt(v.dur)}</div></div><button class="btn" data-add="${i}">Add</button></div>`).join('');
+    box.innerHTML = lastResults.map((v,i)=>`<div class="res"><img src="${esc(v.thumb)}" alt="" data-watch="${esc(v.id)}" title="Click to preview on YouTube before adding" style="cursor:pointer" loading="lazy"><div><div class="rt">${esc(v.title)}</div><div class="rc">${esc(v.channel)}, ${fmt(v.dur)}</div></div><button class="btn" data-add="${i}">Add</button></div>`).join('');
   }catch(e){
     // A key that has stopped working should put its setup steps back on screen.
     if(/key|quota|forbidden|denied/i.test(e.message||'')){ store.keyOK = false; save(); setupForced = true; syncSetupVis(); $('#settings').open = true; }
@@ -1439,7 +1494,7 @@ function stripHTML(segs,D,off){
   const lead = (+off > 0)
     ? `<i class="lead" style="flex:${(+off).toFixed(2)};background:${ZONES[0].color}" title="Intro: ride easy for the first ${fmt(+off)}"></i>`
     : '';
-  return lead + segs.map(s=>`<i class="${s.race?'spec':''}" style="flex:${(s.end-s.start).toFixed(2)};background:${ZONES[s.z].color}" title="${s.race?'Race':ZONES[s.z].name}: ${esc(s.label)}"></i>`).join('');
+  return lead + segs.map(s=>`<i class="${s.race?'spec':(s.effect||'')}" style="flex:${(s.end-s.start).toFixed(2)};background:${ZONES[s.z].color}" title="${s.race?'Race':ZONES[s.z].name}: ${esc(s.label)}"></i>`).join('');
 }
 function pipsHTML(level){
   let h=''; for(let i=1;i<=5;i++) h += `<i style="${i<=level?'background:'+ZONES[level-1].color:''}"></i>`; return h;
@@ -1674,6 +1729,10 @@ $('#tracks').addEventListener('change',e=>{
   });
 })();
 $('#results').addEventListener('click',e=>{
+  // Confirm it's the right/official video before committing to it — opens the actual
+  // YouTube page in a new tab rather than guessing from a thumbnail alone.
+  const w = e.target.closest('[data-watch]');
+  if(w){ window.open('https://www.youtube.com/watch?v='+encodeURIComponent(w.dataset.watch), '_blank', 'noopener'); return; }
   const b1 = e.target.closest('[data-add]');
   if(b1){ addFromMeta(lastResults[+b1.dataset.add]); b1.textContent = 'Added'; b1.disabled = true; return; }
   const b2 = e.target.closest('[data-addmash]');
@@ -1962,6 +2021,18 @@ const hw = $('#hw'), hwInner = $('#hwInner');
 let pps = 4, nowY = 200, cdLast = null, spectrumOn = false;
 const cache = {};
 function setText(id,val){ if(cache[id]!==val){ cache[id]=val; $('#'+id).textContent=val; } }
+// The zone name is centered and never wraps, but "Yellow" is noticeably wider than "Red"
+// or "Blue" at the same font size — left uncontrolled it can run past the card and get
+// clipped by the panel's overflow. Shrink it down until it actually fits.
+function fitZoneName(){
+  const el = $('#zoneName'); if(!el) return;
+  el.style.fontSize = '';
+  requestAnimationFrame(()=>{
+    let size = parseFloat(getComputedStyle(el).fontSize), guard = 0;
+    while(el.scrollWidth > el.clientWidth + 1 && size > 34 && guard < 40){ size -= 3; el.style.fontSize = size+'px'; guard++; }
+  });
+}
+function setZoneName(val){ const changed = cache.zoneName!==val; setText('zoneName',val); if(changed) fitZoneName(); }
 
 function layoutHighway(){
   const t = tracks()[cur]; if(!t) return;
@@ -2001,9 +2072,9 @@ function showRide(){
 }
 function createSharedPlayer(videoId){
   player = new YT.Player('yt',{host:YT_HOST,width:'100%',height:'100%',videoId,
-    playerVars:{autoplay:1,controls:1,rel:0,fs:0,playsinline:1,iv_load_policy:3,modestbranding:1},
-    events:{onReady:()=>{ ytOK = true; },
-      onStateChange:ev=>{ if(ev.data===0) nextTrack(); syncPlayBtn(ev.data); },
+    playerVars:{autoplay:1,controls:1,rel:0,fs:0,playsinline:1,iv_load_policy:3,modestbranding:1,cc_load_policy:0,cc_lang_pref:'',hl:'en'},
+    events:{onReady:()=>{ ytOK = true; try{ player.unloadModule('captions'); player.unloadModule('cc'); player.setOption('captions','track',{}); }catch(e){} },
+      onStateChange:ev=>{ if(ev.data===0) nextTrack(); syncPlayBtn(ev.data); if(ev.data===1){ try{ player.unloadModule('captions'); player.setOption('captions','track',{}); }catch(e){} } },
       onError:()=>{ toast('That video will not play here. Skipping.'); setTimeout(nextTrack,1200); }}});
 }
 async function startClass(from){
@@ -2017,7 +2088,11 @@ async function goToCurrent(){
   videoMode = false;
   anchor = {t:0,at:performance.now()}; ended = false; t._checked = false;
   setText('npTitle',t.title); setText('npIdx','Song '+(cur+1)+' of '+tracks().length);
-  setText('bpmV',String(t.bpm)); $('#pulse').style.setProperty('--beat',(60/t.bpm).toFixed(3)+'s');
+  // Cadence reads roughly half the song's BPM once it's fast enough that riding it 1:1
+  // would be an absurd spin — so anything over 120 shows the halved number instead.
+  setText('bpmV',String(t.bpm>120 ? Math.round(t.bpm/2) : t.bpm));
+  $('#pulse').style.setProperty('--beat',(60/t.bpm).toFixed(3)+'s');
+  setText('wType', workoutTypeText(t));
 
   if(t.kind==='mashup'){
     if(player){ try{ player.pauseVideo(); }catch(e){} }
@@ -2051,6 +2126,12 @@ function prevTrack(){
   cur--; goToCurrent();
 }
 function syncPlayBtn(st){ $('#cPlay').textContent = st===1 ? 'Pause' : 'Play'; }
+function workoutTypeText(t){
+  const p = t.plan; if(!p) return '';
+  const label = STYLES[p.style] || '';
+  if(p.style==='interval' && t.opts && t.opts.workSec) return label+' · '+t.opts.workSec+'s on / '+t.opts.restSec+'s off';
+  return label;
+}
 
 function frame(){
   raf = requestAnimationFrame(frame);
@@ -2087,6 +2168,7 @@ function frame(){
   const total = tracks().reduce((a,x)=>a+x.dur,0);
   setText('npClass','Class '+fmt(before+Math.min(time,t.dur))+' of '+fmt(total));
   setText('songLeft',fmtDown(Math.max(0,t.dur-time)));
+  if(total>0){ const cpf = $('#classProgressFill'); if(cpf) cpf.style.width = (clamp((before+Math.min(time,t.dur))/total,0,1)*100)+'%'; }
 
   const card = $('#zoneCard'), callout = $('#callout');
   let idx = -1;
@@ -2097,7 +2179,9 @@ function frame(){
     if(idx!==lastIdx){
       setSpectrum(!!seg.race);
       card.style.background = seg.race ? '' : z.color; card.style.color = seg.race ? '' : z.ink; setZoneVars(seg.z);
-      setText('zoneName', seg.race ? 'Race' : z.name); setText('zoneLabel',seg.label+(seg.cue?': '+seg.cue:''));
+      card.classList.toggle('fire', seg.effect==='fire');
+      card.classList.toggle('tunnel', seg.effect==='tunnel');
+      setZoneName(seg.race ? 'Race' : z.name); setText('zoneLabel',seg.label+(seg.cue?': '+seg.cue:''));
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
       hwInner.querySelectorAll('.hwseg').forEach((el,i)=>el.classList.toggle('past',i<idx));
       lastIdx = idx;
@@ -2125,21 +2209,25 @@ function frame(){
     }
     const y0 = nowY - (plan.D-p)*pps; hwInner.style.transform = 'translateY('+y0+'px)';
   } else {
-    // before the plan starts
-    const first = segs[0], fz = ZONES[first.z];
-    if(lastIdx!==-1){ card.style.background = '#232b3a'; card.style.color = '#eef1f6'; setZoneVars(0); lastIdx = -1;
+    // before the plan starts — this lead-in is a real White zone, ridden easy, not a
+    // neutral "get ready" screen. Matches the white lead-in already shown in the build
+    // view's strip.
+    const first = segs[0], fz = ZONES[first.z], lead = ZONES[0];
+    if(lastIdx!==-1){ lastIdx = -1;
       card.classList.remove('flash'); hwInner.querySelectorAll('.hwseg').forEach(el=>el.classList.remove('past')); }
     setSpectrum(false);
-    setText('zoneName','Get ready'); setText('zoneLabel','First up: '+(first.race?'Race':fz.name));
+    card.style.background = lead.color; card.style.color = lead.ink; setZoneVars(0);
+    card.classList.remove('fire','tunnel');
+    setZoneName(lead.name); setText('zoneLabel','Intro — settle in before it starts');
     setText('timer', fmtDown(-p));
     $('#ride').style.setProperty('--zone-next',fz.color);
     callout.querySelector('.sw').style.background = fz.color; callout.classList.remove('hot','long');
     $('#ride').classList.remove('edgehot');
     setCountdown(-p<=10 ? -p : null);
-    setText('calloutText','Opens in '+(first.race?'Race':fz.name)+' in '+fmtDown(-p));
+    setText('calloutText','Next: '+(first.race?'Race':fz.name)+' in '+fmtDown(-p));
     hwInner.style.transform = 'translateY('+(nowY-(plan.D-p)*pps)+'px)';
   }
-  if(ended && !playingNow){ setSpectrum(false); setCountdown(null); setText('zoneName','Done'); setText('zoneLabel','Nice work, class.'); }
+  if(ended && !playingNow){ setSpectrum(false); setCountdown(null); setZoneName('Done'); setText('zoneLabel','Nice work, class.'); }
 }
 
 $('#btnStart').onclick = ()=>{ activeList = null; activeOrigin = 'build'; startClass(0); };
@@ -2174,7 +2262,7 @@ $('#cVidToggle').onclick = async ()=>{
     if(mashupAudio) mashupAudio.play().catch(()=>{});
   }
 };
-$('#cLook').onclick = ()=>{ store.look = store.look===90?150:(store.look===150?45:90); $('#cLook').textContent = 'Look ahead '+store.look+'s'; save(); layoutHighway(); };
+$('#cLook').addEventListener('change', ()=>{ store.look = clamp(+$('#cLook').value||150,45,240); save(); layoutHighway(); });
 $('#timerMode').onclick = ()=>{ store.countUp = !store.countUp; $('#timerMode').textContent = store.countUp?'Counting up':'Counting down'; save(); };
 $('#cFull').onclick = ()=>toggleFull();
 $('#cBack').onclick = exitRide;
@@ -2270,6 +2358,15 @@ function showSavedNote(text){
   savedNoteT = setTimeout(()=>{ el.hidden = true; }, 5000);
 }
 function saveTimeStr(){ return new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}); }
+// A theme (set from New playlist) is meant to steer building THIS one playlist. Once it's
+// saved, the theme has done its job — clear it so it doesn't linger into whatever's built
+// next, and close the suggestions panel that went with it.
+function clearThemeAfterSave(){
+  if(!store.theme && $('#recs').hidden) return;
+  store.theme = ''; renderThemeChip();
+  recsOpen = false; $('#btnSuggest').textContent = 'Suggest songs'; $('#recs').hidden = true;
+  save();
+}
 function savePlaylist(){
   if(!store.tracks.length){ toast('Add some songs first.'); return; }
   const name = ($('#plName').value||'').trim() || 'Untitled playlist';
@@ -2277,10 +2374,10 @@ function savePlaylist(){
   const snapshot = JSON.parse(JSON.stringify(store.tracks)); // decouple from the live draft
   if(store.currentId){
     const p = store.playlists.find(x=>x.id===store.currentId);
-    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; save(); $('#plName').value = name; showSavedNote('Saved "'+name+'" at '+saveTimeStr()); showSavedBar(name); return; }
+    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; clearThemeAfterSave(); save(); $('#plName').value = name; showSavedNote('Saved "'+name+'" at '+saveTimeStr()); showSavedBar(name); return; }
   }
   const p = {id:plId(), name, tracks:snapshot, createdAt:now, updatedAt:now};
-  store.playlists.push(p); store.currentId = p.id; save(); $('#plName').value = name;
+  store.playlists.push(p); store.currentId = p.id; clearThemeAfterSave(); save(); $('#plName').value = name;
   showSavedNote('Saved "'+name+'" at '+saveTimeStr());
   showSavedBar(name);
 }
@@ -2399,7 +2496,7 @@ $('#rideExit').onclick = exitRide;
 $('#brandbar').innerHTML = $('#brandbar2').innerHTML = ZONES.map(z=>`<i style="background:${z.color}"></i>`).join('');
 $('#apiKey').value = store.apiKey || '';
 syncSetupVis();
-$('#cLook').textContent = 'Look ahead '+store.look+'s';
+$('#cLook').value = String(clamp(+store.look||150,45,240));
 $('#classLen').value = store.classLen || 45;
 renderThemeChip();
 $('#timerMode').textContent = store.countUp?'Counting up':'Counting down';
