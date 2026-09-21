@@ -62,6 +62,8 @@ input[type=text]:focus,input[type=number]:focus,input[type=search]:focus,select:
 #topnav .btn.primary:hover{background:#fff;color:#0f131a}
 
 /* ---------- playlist name / save bar ---------- */
+.plnamebar #btnNewPl2{margin-left:auto}
+.themechip{color:#9fd0ff;border:1px solid rgba(159,208,255,.35);background:rgba(159,208,255,.1);border-radius:999px;padding:3px 11px;font-size:13px;font-weight:700}
 .plnamebar{display:flex;gap:8px;align-items:center;margin:-8px 0 22px;flex-wrap:wrap;position:relative}
 .plnamebar input{width:260px}
 .plnamebar .note{margin:0;font-size:13px}
@@ -136,6 +138,22 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .bpmbox{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:8px;padding:2px 8px;color:var(--text)}
 .lenbox{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:10px;padding:6px 12px;color:var(--text);font-weight:700}
 .lenbox input{width:56px;background:transparent;border:0;color:var(--text);font:inherit;text-align:right}
+#setupDock{position:fixed;right:14px;bottom:12px;z-index:30;opacity:.5;transition:opacity .15s}
+#setupDock:hover{opacity:1}
+#savedBar{position:fixed;left:0;right:0;top:0;z-index:60;display:flex;justify-content:center;padding:14px 16px;pointer-events:none}
+#savedBar .sb-in{pointer-events:auto;display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--card-grad);border:1px solid var(--card-border);border-radius:16px;padding:14px 18px;box-shadow:var(--shadow-lg,0 18px 50px rgba(0,0,0,.5));max-width:min(920px,94vw)}
+#savedBar b{font-size:17px}
+#savedBar .sb-acts{display:flex;gap:8px;flex-wrap:wrap}
+#newDlg{border:1px solid var(--card-border);border-radius:18px;background:var(--panel);color:var(--text);padding:0;max-width:min(560px,94vw)}
+#newDlg::backdrop{background:rgba(3,6,12,.6)}
+.newform{padding:22px;display:flex;flex-direction:column;gap:14px}
+.newform h3{margin:0;font-size:24px}
+.newform label{display:flex;flex-direction:column;gap:6px}
+.newform input[type=text]{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:11px 13px;color:var(--text);font:inherit}
+.newform .flab em{color:var(--muted);font-style:normal;font-weight:500}
+.newacts{display:flex;gap:8px;justify-content:flex-end;margin-top:4px}
+#btnNewPl2{background:linear-gradient(180deg,#2fd07a,#1eb767);color:#06210f;border:0;font-weight:800}
+#btnNewPl2:hover{background:#2fd07a;color:#06210f}
 #recs{display:flex;flex-direction:column;gap:8px;margin:12px 0 4px;padding:14px;border:1px dashed var(--card-border);border-radius:14px;background:rgba(255,255,255,.02)}
 #recs .rd{color:#9fd0ff}
 #totals .short{color:#e6c866}
@@ -261,8 +279,8 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .timerrow{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
 #timer{font-family:var(--disp);font-weight:800;font-size:clamp(58px,12.5vh,160px);line-height:.9;font-variant-numeric:tabular-nums;text-shadow:0 0 40px rgba(47,125,255,.25)}
 #timerMode{align-self:flex-start;margin-top:6px;font-size:clamp(12px,1.6vh,15px)}
-#callout{display:flex;align-items:center;gap:.18em;border-radius:14px;padding:8px 14px;background:var(--panel2);font-weight:800;font-size:clamp(30px,7.2vh,96px);line-height:.98;box-shadow:var(--shadow-sm);flex-wrap:wrap}
-#callout.long{font-size:clamp(14px,2.4vh,26px);font-weight:700;line-height:1.15}
+#callout{display:flex;align-items:center;gap:.18em;border-radius:14px;padding:8px 14px;background:var(--panel2);font-weight:700;font-size:clamp(15px,2.6vh,28px);line-height:1.15;box-shadow:var(--shadow-sm);flex-wrap:wrap}
+#callout.long{font-size:clamp(14px,2.4vh,26px)}
 #callout .sw{width:.62em;height:.62em;border-radius:.14em;flex:none;background:var(--z0);box-shadow:0 0 12px -1px var(--zone-next)}
 #callout.hot{outline:3px solid var(--zone-next);animation:hot .5s ease-in-out infinite alternate}
 @keyframes hot{to{background:#2d3648}}
@@ -334,7 +352,6 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
   <div class="plnamebar">
     <input id="plName" type="text" placeholder="Untitled playlist" aria-label="Playlist name">
     <button class="btn primary" id="btnSavePl">Save playlist</button>
-    <button class="btn" id="btnNewPl">New playlist</button>
     <div class="loadwrap">
       <button class="btn" id="btnLoadPl" aria-haspopup="true" aria-expanded="false">Load playlist ▾</button>
       <div id="loadPlMenu" hidden>
@@ -343,6 +360,8 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       </div>
     </div>
     <span id="plSavedNote" class="savednote" hidden></span>
+    <span id="themeChip" class="themechip" hidden></span>
+    <button class="btn" id="btnNewPl2">+ New playlist</button>
   </div>
 
   <div class="cols">
@@ -361,7 +380,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
         <input id="link" type="text" placeholder="Or paste a YouTube link" aria-label="YouTube link">
         <button class="btn" id="btnAddLink">Add</button>
       </div>
-      <details id="settings">
+      <details id="settings" hidden>
         <summary>Search setup</summary>
         <p class="note">Searching YouTube needs a free API key. Links work without one.</p>
         <ol>
@@ -377,6 +396,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
         <p class="note">The key is saved in this browser only. The free quota allows roughly 100 searches a day.</p>
       </details>
       <button class="mini" id="btnShowSetup" hidden style="margin-top:12px">Search setup</button>
+      <div id="setupDock"><button class="mini" id="btnDockSetup" title="YouTube search key and setup">Search setup</button></div>
     </div>
 
     <div class="list">
@@ -410,6 +430,33 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 </section>
 
 <!-- ============ RIDE VIEW ============ -->
+<div id="savedBar" hidden role="status">
+  <div class="sb-in">
+    <b id="savedBarMsg">Saved</b>
+    <div class="sb-acts">
+      <button class="btn" id="sbEdit">Edit</button>
+      <button class="btn primary spectrum" id="sbStart">Start class</button>
+      <button class="btn" id="sbClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<dialog id="newDlg">
+  <form method="dialog" class="newform">
+    <h3>Start a new class</h3>
+    <p class="note">Set the shape of the ride and the suggestions will follow it. Both are optional — you can change them any time.</p>
+    <label><span class="flab">Class length</span>
+      <span class="lenbox"><input id="nLen" type="number" min="10" max="120" step="5" value="45"> minutes</span></label>
+    <label><span class="flab">Theme <em>(optional)</em></span>
+      <input id="nTheme" type="text" placeholder="Britney night, 2000s throwback, Halloween, divas..." autocomplete="off"></label>
+    <p class="note">Suggestions will lean towards the theme across YouTube and your own mashups.</p>
+    <div class="newacts">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary spectrum" id="nGo" value="go">Start building</button>
+    </div>
+  </form>
+</dialog>
+
 <section id="ride" hidden>
   <div id="spectrumFrame" hidden></div>
   <button id="rideExit" title="Exit class" aria-label="Exit class">&times;</button>
@@ -711,6 +758,12 @@ function effort(segs){
 // the widget never goes fully dark.
 const MASHUP_SUPABASE_URL = 'https://txkmwsnvtwobhrdrablw.supabase.co';
 const MASHUP_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4a213c252dHdvYmhyZHJhYmx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwOTY0MjQsImV4cCI6MjA5ODY3MjQyNH0.S4gQFyfNUhcUbIh5vBaNEj3VxQONTYcuc9VaSCxN74c';
+// Audio relay used by bringmethemashup itself (js/config.js PCLOUD_RELAY_URL) for
+// listeners whose network can't reach pCloud directly. It resolves AND serves from one
+// IP, which is why it works where a direct link fails. This widget had no equivalent,
+// which is the difference Ian noticed between the two sites.
+const PCLOUD_RELAY_URL = 'https://txkmwsnvtwobhrdrablw.supabase.co/functions/v1/pcloud-stream';
+const pcloudRelayUrl = code => PCLOUD_RELAY_URL+'?code='+encodeURIComponent(code);
 const MASHUP_CATALOG_FALLBACK_URL = 'https://bringmethemashup.github.io/new-mashup-site/data/catalog.json';
 const MASHUP_PLACEHOLDER = 'data:image/svg+xml;utf8,' + encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="112" height="63"><rect width="112" height="63" fill="#1e2532"/><circle cx="30" cy="31" r="14" fill="#2f7dff"/><circle cx="60" cy="31" r="14" fill="#2fd07a" opacity="0.8"/><circle cx="90" cy="31" r="14" fill="#ff3b3b" opacity="0.6"/></svg>'
@@ -787,7 +840,15 @@ async function resolvePcloudUrl(publicLink, force){
   if(!force && hit && hit.exp > Date.now()+10*60*1000) return hit.url;
   let j;
   try{ j = await pcloudCallApi('api.pcloud.com',code); }
-  catch(e){ j = await pcloudCallApi('eapi.pcloud.com',code); }
+  catch(e){
+    try{ j = await pcloudCallApi('eapi.pcloud.com',code); }
+    catch(e2){
+      // Both API hosts unreachable — stream through the relay instead (stable URL).
+      const url = pcloudRelayUrl(code);
+      pcloudCache[code] = {url, exp: Date.now()+24*60*60*1000}; pcloudPersist();
+      return url;
+    }
+  }
   const url = 'https://'+j.hosts[0]+j.path;
   const exp = Date.parse(j.expires) || (Date.now()+2*60*60*1000);
   pcloudCache[code] = {url,exp}; pcloudPersist();
@@ -885,12 +946,30 @@ const ArtworkArt = (()=>{
     }
     return out;
   }
+  // Guaranteed imagery, in descending order of how good it looks:
+  //   real artist photos -> album covers -> the matched YouTube video's stills.
+  // The lookups above depend on third-party APIs that can (and currently do) come back
+  // empty, and legacy catalogue entries carry no sourceSongs to search on at all, so
+  // without a floor the montage renders black — which is what Ian kept seeing.
+  function fallbackArt(entry){
+    const id = entry && entry.video && entry.video.sourceId;
+    if(!id) return [];
+    return ['maxresdefault','sddefault','hqdefault'].map(q=>'https://i.ytimg.com/vi/'+id+'/'+q+'.jpg');
+  }
   async function collageFor(entry){
-    const names = artistsOf(entry); if(!names.length) return [];
-    const photos = (await Promise.all(names.map(n=>artistPhoto(n)))).filter(Boolean);
-    if(photos.length) return photos;
-    const covers = await Promise.all(names.map(n=>albumCover(n)));
-    return covers.filter(Boolean);
+    const names = artistsOf(entry);
+    if(names.length){
+      const photos = (await Promise.all(names.map(n=>artistPhoto(n)))).filter(Boolean);
+      if(photos.length) return photos;
+      const covers = (await Promise.all(names.map(n=>albumCover(n)))).filter(Boolean);
+      if(covers.length) return covers;
+    } else {
+      // No source songs — try the mashup's own artist and title before giving up.
+      const guesses = [entry.mashupArtist, entry.displayTitle].filter(Boolean);
+      const photos = (await Promise.all(guesses.map(n=>artistPhoto(n)))).filter(Boolean);
+      if(photos.length) return photos;
+    }
+    return fallbackArt(entry);
   }
   return {collageFor, artistsOf};
 })();
@@ -1011,7 +1090,7 @@ let toastT;
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{el.hidden=true;},3600); }
 
 // ---------- state ----------
-const store = {tracks:[], apiKey:'', keyOK:false, countUp:true, look:90, playlists:[], currentId:null, classLen:45};
+const store = {tracks:[], apiKey:'', keyOK:false, countUp:true, look:90, playlists:[], currentId:null, classLen:45, theme:''};
 function save(){ try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){} }
 function loadStore(){
   try{
@@ -1053,36 +1132,11 @@ function makeMashupTrack(entry){
 }
 function addMashup(entry){
   const t = makeMashupTrack(entry); store.tracks.push(t); autoPlanClass(store.tracks); save(); renderTracks();
-  probeMashupDuration(t);
+  // NOTE: do not open a second <audio> for this track to read its duration. pCloud's
+  // download URLs are single-use/IP-locked — a probe connection poisons the URL the
+  // player then tries to use, and the song silently never starts. Length is learned
+  // during the ride instead (see the loadedmetadata handler on mashupAudio).
   return t;
-}
-// The catalog doesn't store how long a mashup runs, so until now every one counted as a guessed
-// 3:30 while a class was being built, and only got its real length when it happened to play.
-// That quietly skewed the class total, the "short of X min" readout, the arc and the
-// suggestions. pCloud sends no CORS headers so fetch() can't help, but a media element can
-// still read a file's metadata from it — the same reason playback works at all — so the real
-// duration can be learned the moment a song is added, without downloading the audio.
-function probeMashupDuration(t){
-  if(!t || !t.audioLink || t.durKnown) return;
-  let settled = false;
-  const a = new Audio();
-  a.preload = 'metadata';
-  const stop = () => { if(settled) return; settled = true; clearTimeout(timer); try{ a.removeAttribute('src'); a.load(); }catch(e){} };
-  // pCloud stalls often enough that this has to be able to give up (see playMashupAudio)
-  const timer = setTimeout(stop, 12000);
-  a.addEventListener('loadedmetadata', ()=>{
-    const d = Math.round(a.duration);
-    stop();
-    if(!isFinite(d) || d < 20 || d > 1800) return;      // nonsense; keep the estimate
-    if(t.durKnown && t.dur === d) return;
-    t.dur = d; t.durKnown = true;
-    rebuild(t);
-    const ts = tracks();
-    if(ts.indexOf(t) !== -1) autoPlanClass(ts);         // length feeds the arc, so re-plan
-    save(); renderTracks();
-  });
-  a.addEventListener('error', stop);
-  resolvePcloudUrl(t.audioLink).then(url=>{ if(!settled) a.src = url; }).catch(stop);
 }
 function rebuild(t){ t.plan = buildPlan(t,t.opts); }
 
@@ -1138,10 +1192,26 @@ function provisionalTrack(entry){
   const g = guessMeta((entry.displayTitle||'')+' '+mashupLabel(entry), (entry.tags||[]).join(' '));
   return {bpm:g.bpm, genre:g.genre, dur:210, offset:0};
 }
+// How well a catalogue entry matches the class theme: every word of the theme that turns
+// up in the title, artists or tags counts. Returns 0..1 (0 when there is no theme).
+function themeScore(theme, text){
+  const words = (theme||'').toLowerCase().split(/[^a-z0-9]+/).filter(w=>w.length>2);
+  if(!words.length) return 0;
+  const hay = (text||'').toLowerCase();
+  return words.filter(w=>hay.includes(w)).length / words.length;
+}
+function entryText(e){
+  return [e.displayTitle, e.mashupArtist, (e.tags||[]).join(' '),
+    (e.sourceSongs||[]).map(x=>x.artist+' '+x.title).join(' ')].filter(Boolean).join(' ');
+}
 function recommendSongs(catalog, ts, gapSec){
   const have = new Set(ts.map(t=>t.catalogId).filter(Boolean));
-  const pool = catalog.filter(e=>!have.has(e.id)).map(e=>({e, en:songEnergy(provisionalTrack(e))}));
+  let pool = catalog.filter(e=>!have.has(e.id)).map(e=>({e, en:songEnergy(provisionalTrack(e)), th:themeScore(store.theme, entryText(e))}));
   if(!pool.length) return [];
+  // With a theme set, prefer what matches it — but never hand back nothing, so fall
+  // back to the whole library if the theme matches none of it.
+  const onTheme = pool.filter(p=>p.th>0);
+  if(onTheme.length >= 3) pool = onTheme;
   const cur = ts.map(songEnergy);
   const hi  = cur.length ? Math.max(...cur) : null;
   const lo  = cur.length ? Math.min(...cur) : null;
@@ -1362,8 +1432,13 @@ async function addLink(){
 }
 
 // ---------- build view rendering ----------
-function stripHTML(segs,D){
-  return segs.map(s=>`<i class="${s.race?'spec':''}" style="flex:${(s.end-s.start).toFixed(2)};background:${ZONES[s.z].color}" title="${s.race?'Race':ZONES[s.z].name}: ${esc(s.label)}"></i>`).join('');
+function stripHTML(segs,D,off){
+  // A time trial doesn't start on the downbeat — the plan skips the intro. Show that
+  // lead-in as white at the head of the bar so the shape matches what actually happens.
+  const lead = (+off > 0)
+    ? `<i class="lead" style="flex:${(+off).toFixed(2)};background:${ZONES[0].color}" title="Intro: ride easy for the first ${fmt(+off)}"></i>`
+    : '';
+  return lead + segs.map(s=>`<i class="${s.race?'spec':''}" style="flex:${(s.end-s.start).toFixed(2)};background:${ZONES[s.z].color}" title="${s.race?'Race':ZONES[s.z].name}: ${esc(s.label)}"></i>`).join('');
 }
 function pipsHTML(level){
   let h=''; for(let i=1;i<=5;i++) h += `<i style="${i<=level?'background:'+ZONES[level-1].color:''}"></i>`; return h;
@@ -1386,8 +1461,8 @@ function trackHTML(t,i){
         <label class="bpmbox ${t.bpmSrc==='guess'?'guess':''}" title="${tip}"><input class="bpm" type="number" min="60" max="200" value="${t.bpm}" data-act="bpm" aria-label="BPM for ${esc(t.title)}"> BPM</label>
         <button class="mini" data-act="half" title="Half tempo">&frac12;</button><button class="mini" data-act="double" title="Double tempo">&times;2</button>
       </div>
-      <div class="strip">${stripHTML(t.plan.segs,t.plan.D)}</div>
-      <div class="tplan"><b>${STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}${t.plan.off>0?`<span title="The plan starts after the intro">Starts ${fmt(t.plan.off)}</span>`:''}${iv}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.manual?'<span class="pin" title="You set this one by hand — the automatic class plan leaves it alone">Custom</span>':''}${t.bpmSrc==='guess'?'<span class="warn">BPM is an estimate</span>':''}</div>
+      <div class="strip">${stripHTML(t.plan.segs,t.plan.D,t.plan.off)}</div>
+      <div class="tplan"><b>${STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}${t.plan.off>0?`<span title="The plan starts after the intro">Starts ${fmt(t.plan.off)}</span>`:''}${iv}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.manual?'<span class="pin" title="You set this one by hand — the automatic class plan leaves it alone">Custom</span>':''}</div>
     </div>
     <div class="tacts">
       <button class="btn" data-act="quick">Quick build</button>
@@ -1630,27 +1705,57 @@ $('#btnArc').onclick = ()=>{
 };
 var lastRecs = [], recsOpen = false;   // var: renderTracks reads recsOpen and runs before this line
 function recsHeadline(ts){
-  if(!ts.length) return 'Nothing in the class yet — here are a few to start it with.';
+  const th = store.theme ? ' Leaning towards “'+store.theme+'”.' : '';
+  if(!ts.length) return 'Nothing in the class yet — here are a few to start it with.'+th;
   const gap = classTargetSec()-totalDur(ts);
   return gap>30
-    ? 'This class is '+fmt(gap)+' short of '+store.classLen+' min. These would help fill it.'
-    : 'This class already covers '+store.classLen+' min — these would round it out.';
+    ? 'This class is '+fmt(gap)+' short of '+store.classLen+' min. These would help fill it.'+th
+    : 'This class already covers '+store.classLen+' min — these would round it out.'+th;
+}
+// Suggestions come from both sources: Ian's own catalogue (always available) and
+// YouTube (needs the Data API key, so it degrades quietly if that is not working).
+async function youtubeSuggestions(theme, ts, want){
+  if(!store.apiKey || !want) return [];
+  const have = new Set(ts.map(t=>t.id));
+  const genres = ts.map(t=>t.genre).filter(Boolean);
+  const topGenre = genres.sort((a,b)=>genres.filter(g=>g===b).length-genres.filter(g=>g===a).length)[0];
+  const q = (theme || topGenre || 'workout') + ' music';
+  const u = new URL('https://www.googleapis.com/youtube/v3/search');
+  u.search = new URLSearchParams({part:'snippet',type:'video',maxResults:String(Math.min(10,want*3)),q,videoEmbeddable:'true',key:store.apiKey}).toString();
+  const r = await fetch(u); const j = await r.json();
+  if(!r.ok) throw new Error((j.error&&j.error.message)||'YouTube search failed');
+  const ids = (j.items||[]).map(i=>i.id.videoId).filter(Boolean).filter(id=>!have.has(id));
+  if(!ids.length) return [];
+  const vids = await apiVideos(ids.slice(0,want*2));
+  return vids.slice(0,want).map(v=>({yt:v, reason:theme ? 'matches “'+theme+'” on YouTube' : 'on YouTube, fits the class'}));
 }
 async function showRecs(){
   const box = $('#recs'); box.hidden = false;
-  box.innerHTML = '<p class="note">Looking through your mashups...</p>';
+  box.innerHTML = '<p class="note">Looking for songs that fit...</p>';
   try{
     const catalog = await loadMashupCatalog();
     if(!recsOpen) return;
     const ts = tracks();
-    lastRecs = recommendSongs(catalog, ts, classTargetSec()-totalDur(ts));
-    if(!lastRecs.length){ box.innerHTML = '<p class="note">Every mashup in your library is already in this class.</p>'; return; }
+    const gap = classTargetSec()-totalDur(ts);
+    const mash = recommendSongs(catalog, ts, gap);
+    // YouTube is a bonus, never a blocker: if the key is missing or the quota is spent,
+    // the mashup suggestions still stand on their own.
+    let yt = [];
+    try{ yt = await youtubeSuggestions(store.theme, ts, 3); }
+    catch(e){ yt = []; }
+    if(!recsOpen) return;
+    lastRecs = mash.concat(yt);
+    if(!lastRecs.length){ box.innerHTML = '<p class="note">Nothing left to suggest — every mashup in your library is already in this class.</p>'; return; }
     box.innerHTML = '<p class="note">'+esc(recsHeadline(ts))+'</p>' + lastRecs.map((r,i)=>{
+      if(r.yt){
+        const v = r.yt;
+        return `<div class="res"><img src="${esc(v.thumb)}" alt="" loading="lazy"><div><div class="rt">${esc(v.title)}</div><div class="rc">${esc(v.channel)}, ${fmt(v.dur)}</div><div class="rd">${esc(r.reason)}</div></div><button class="btn" data-addrec="${i}">Add</button></div>`;
+      }
       const e = r.entry, label = mashupLabelShort(e);
       const thumb = (e.video && e.video.sourceId) ? ('https://i.ytimg.com/vi/'+e.video.sourceId+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
       return `<div class="res"><img src="${esc(thumb)}" alt="" loading="lazy"><div><div class="rt">${esc(e.displayTitle||label)}</div><div class="rc">${esc(label)}</div><div class="rd">${esc(r.reason)}</div></div><button class="btn" data-addrec="${i}">Add</button></div>`;
     }).join('');
-  }catch(err){ box.innerHTML = '<p class="note err">'+esc(err.message||'Could not load your mashup library.')+'</p>'; }
+  }catch(err){ box.innerHTML = '<p class="note err">'+esc(err.message||'Could not load suggestions.')+'</p>'; }
 }
 $('#btnSuggest').onclick = ()=>{
   recsOpen = !recsOpen;
@@ -1661,7 +1766,7 @@ $('#recs').addEventListener('click', e=>{
   const b = e.target.closest('[data-addrec]'); if(!b) return;
   const r = lastRecs[+b.dataset.addrec]; if(!r) return;
   b.textContent = 'Added'; b.disabled = true;
-  addMashup(r.entry);   // adds, re-plans the class, re-renders, and refreshes this panel
+  if(r.yt) addFromMeta(r.yt); else addMashup(r.entry);   // re-plans and refreshes this panel
 });
 // The class already plans itself on every change, so this button's job is now the reset:
 // it takes back the songs the instructor pinned by hand and rebuilds everything.
@@ -1732,7 +1837,7 @@ function syncDialog(){
   if(!wrTouched && o.style==='interval'){ const g = wrDefaults(); $('#fWork').value = g.work; $('#fRest').value = g.rest; }
   syncWR();
   const plan = buildPlan(temp,o);
-  $('#fStrip').innerHTML = stripHTML(plan.segs,plan.D);
+  $('#fStrip').innerHTML = stripHTML(plan.segs,plan.D,plan.off);
   const e = effort(plan.segs);
   if(!dT.offsetManual) $('#fOff').value = Math.round(plan.off);
   $('#offNote').textContent = dT.offsetManual ? 'Set by you.' : (plan.off>0 ? 'Chosen automatically for a time trial.' : 'Automatic.');
@@ -1824,22 +1929,28 @@ function waitForAudioReady(a, ms){
     a.addEventListener('canplay', onReady);
   });
 }
-async function playMashupAudio(t, retried){
+// stage 0 = cached/direct link, 1 = freshly resolved direct link, 2 = relay stream.
+async function playMashupAudio(t, stage){
+  stage = stage|0;
   const a = ensureMashupAudio();
   if(!t.audioLink){ toast('This mashup has no audio file linked yet.'); return; }
+  const code = pcloudExtractCode(t.audioLink);
   try{
-    const url = await resolvePcloudUrl(t.audioLink, !!retried);
+    const url = stage>=2 && code ? pcloudRelayUrl(code) : await resolvePcloudUrl(t.audioLink, stage===1);
     if(tracks()[cur]!==t) return;
     a.src = url;
     a.play().catch(()=>{});
-    const ready = await waitForAudioReady(a, 6000);
+    const ready = await waitForAudioReady(a, stage>=2 ? 12000 : 6000);
     if(tracks()[cur]!==t) return;
-    if(!ready){
-      if(!retried){ invalidatePcloud(t.audioLink); return playMashupAudio(t, true); }
-      toast('This mashup’s audio is stuck loading — try Next then Prev, or reload the page.');
-    }
+    if(ready) return;
+    // A direct pCloud link can resolve cleanly and then never deliver a byte. Re-resolve
+    // once, and if that stalls too, stream through the relay rather than giving up.
+    if(stage===0){ invalidatePcloud(t.audioLink); return playMashupAudio(t, 1); }
+    if(stage===1 && code) return playMashupAudio(t, 2);
+    toast('This mashup’s audio would not load, even through the backup stream.');
   }catch(err){
-    if(!retried){ invalidatePcloud(t.audioLink); return playMashupAudio(t, true); }
+    if(stage===0){ invalidatePcloud(t.audioLink); return playMashupAudio(t, 1); }
+    if(stage===1 && code) return playMashupAudio(t, 2);
     toast('Could not play this mashup’s audio.');
   }
 }
@@ -2165,12 +2276,12 @@ function savePlaylist(){
   const snapshot = JSON.parse(JSON.stringify(store.tracks)); // decouple from the live draft
   if(store.currentId){
     const p = store.playlists.find(x=>x.id===store.currentId);
-    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; save(); $('#plName').value = name; showSavedNote('Saved "'+name+'" at '+saveTimeStr()); toast('Saved "'+name+'".'); return; }
+    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; save(); $('#plName').value = name; showSavedNote('Saved "'+name+'" at '+saveTimeStr()); showSavedBar(name); return; }
   }
   const p = {id:plId(), name, tracks:snapshot, createdAt:now, updatedAt:now};
   store.playlists.push(p); store.currentId = p.id; save(); $('#plName').value = name;
   showSavedNote('Saved "'+name+'" at '+saveTimeStr());
-  toast('Saved "'+name+'".');
+  showSavedBar(name);
 }
 function newPlaylist(){
   store.tracks = []; store.currentId = null; $('#plName').value = ''; $('#plSavedNote').hidden = true; save(); renderTracks();
@@ -2236,7 +2347,47 @@ function exitRide(){
 $('#navCreator').onclick = ()=>{ freshenCreator(); showCreator(); };
 $('#navStart').onclick = showLibrary;
 $('#btnSavePl').onclick = savePlaylist;
-$('#btnNewPl').onclick = newPlaylist;
+$('#btnNewPl2').onclick = openNewPlaylist;
+$('#btnDockSetup').onclick = ()=>{ setupForced = true; syncSetupVis(); const d=$('#settings'); d.hidden=false; d.open=true; d.scrollIntoView({block:'center'}); };
+
+// ---------- new playlist setup ----------
+// Ian's instructor runs theme rides, so the class is set up before any songs are added:
+// length and a free-text theme. Nothing is auto-added — the theme just steers what the
+// suggestions offer, across YouTube and the mashup catalogue.
+function openNewPlaylist(){
+  $('#nLen').value = store.classLen || 45;
+  $('#nTheme').value = store.theme || '';
+  $('#newDlg').showModal();
+}
+$('#newDlg').addEventListener('close', ()=>{
+  if($('#newDlg').returnValue !== 'go') return;
+  store.classLen = clamp(+$('#nLen').value||45,10,120);
+  store.theme = ($('#nTheme').value||'').trim();
+  $('#classLen').value = store.classLen;
+  newPlaylist();
+  renderThemeChip();
+  recsOpen = true; $('#btnSuggest').textContent = 'Hide suggestions'; showRecs();
+});
+function renderThemeChip(){
+  const el = $('#themeChip'); if(!el) return;
+  el.hidden = !store.theme;
+  el.textContent = store.theme ? 'Theme: '+store.theme : '';
+  el.title = 'Suggestions lean towards this theme. Start a new playlist to change it.';
+}
+
+// ---------- saved confirmation ----------
+let savedBarT = null;
+function showSavedBar(name){
+  const bar = $('#savedBar');
+  $('#savedBarMsg').textContent = 'Saved “'+name+'”.';
+  bar.hidden = false;
+  clearTimeout(savedBarT);
+  savedBarT = setTimeout(hideSavedBar, 15000);   // closes itself if nothing is picked
+}
+function hideSavedBar(){ clearTimeout(savedBarT); $('#savedBar').hidden = true; }
+$('#sbClose').onclick = hideSavedBar;
+$('#sbEdit').onclick = ()=>{ hideSavedBar(); showCreator(); };
+$('#sbStart').onclick = ()=>{ hideSavedBar(); if(store.currentId) startSavedPlaylist(store.currentId); };
 $('#rideExit').onclick = exitRide;
 
 // ---------- init ----------
@@ -2245,6 +2396,7 @@ $('#apiKey').value = store.apiKey || '';
 syncSetupVis();
 $('#cLook').textContent = 'Look ahead '+store.look+'s';
 $('#classLen').value = store.classLen || 45;
+renderThemeChip();
 $('#timerMode').textContent = store.countUp?'Counting up':'Counting down';
 store.tracks.forEach(t=>{ if(!t.plan || !t.opts){ if(!t.opts) t.opts = quickPick(t,'balanced',0); rebuild(t); } });
 autoPlanClass(store.tracks); save();   // persist the arc so what's shown is what's stored
