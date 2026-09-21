@@ -2360,15 +2360,18 @@ function openNewPlaylist(){
   $('#nTheme').value = store.theme || '';
   $('#newDlg').showModal();
 }
-$('#newDlg').addEventListener('close', ()=>{
-  if($('#newDlg').returnValue !== 'go') return;
+// Wired to the button rather than the dialog's close event: submitting a
+// <form method="dialog"> closes the dialog and sets returnValue but does NOT reliably
+// fire `close`, so anything hanging off that event silently never runs.
+function applyNewPlaylist(){
   store.classLen = clamp(+$('#nLen').value||45,10,120);
   store.theme = ($('#nTheme').value||'').trim();
   $('#classLen').value = store.classLen;
   newPlaylist();
   renderThemeChip();
   recsOpen = true; $('#btnSuggest').textContent = 'Hide suggestions'; showRecs();
-});
+}
+$('#nGo').onclick = ()=>{ setTimeout(applyNewPlaylist, 0); };   // after the dialog closes
 function renderThemeChip(){
   const el = $('#themeChip'); if(!el) return;
   el.hidden = !store.theme;
