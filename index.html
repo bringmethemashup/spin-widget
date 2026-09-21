@@ -2356,11 +2356,14 @@ function draftIsSaved(){
   return draftSongSig(p.tracks) === draftSongSig(store.tracks) && store.tracks.length>0;
 }
 function freshenCreator(){
+  // The theme is cleared regardless of whether there's a draft to discard — a theme set up
+  // via New playlist and then abandoned (no songs ever added) shouldn't linger just because
+  // there was nothing else to freshen.
+  clearTheme();
   if(!store.tracks.length || !draftIsSaved()) return;
   const name = ($('#plName').value||'').trim();
   store.tracks = []; store.currentId = null;
   $('#plName').value = ''; $('#plSavedNote').hidden = true;
-  clearTheme(); // the saved playlist is done being built — its theme shouldn't steer the next one
   save(); renderTracks();
   toast(name ? '"'+name+'" is saved — starting fresh. Reopen it any time from Load playlist.'
              : 'Starting fresh. Your saved playlists are under Load playlist.');
