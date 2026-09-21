@@ -1380,10 +1380,11 @@ let lastResults = [];
 // steps on screen; a small "Search setup" button brings them back when needed.
 let setupForced = false;
 function syncSetupVis(){
-  const mash = findMode === 'mashup';
-  const done = !!store.keyOK && !setupForced;
-  $('#settings').hidden = mash || done;
-  $('#btnShowSetup').hidden = mash || !done;
+  // The key setup no longer lives under the search box at all — it only appears when it
+  // is asked for, from the corner dock, or when a key actually stops working.
+  $('#settings').hidden = !setupForced;
+  $('#btnShowSetup').hidden = true;
+  $('#setupDock').hidden = findMode === 'mashup';
 }
 async function doSearch(){
   if(findMode==='mashup') return doSearchMashup();
