@@ -195,6 +195,11 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #fInfo{color:var(--muted);font-size:14px;min-height:1.4em;margin-bottom:14px}
 .grid2 .span2{grid-column:1/-1}
 @media(max-width:520px){.grid2 .span2{grid-column:auto}}
+#fCustomSegs{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.segrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
+.segrow .chip.segz{padding:5px 10px;font-size:12.5px}
+.segdurwrap{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;font-weight:600;margin-left:auto}
+.segdurwrap input{width:64px;background:#0f141c;border:1px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--text);font:inherit;text-align:right}
 .flab{font-size:14px;color:var(--muted)}
 /* toggles instead of dropdowns — no popup menus anywhere in the dialog */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -275,13 +280,14 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .tabs .btn{padding:7px 14px;font-size:14px;border:0;background:transparent;color:var(--muted);border-radius:8px;font-weight:600}
 .tabs .btn.primary{background:var(--panel2);color:var(--text);box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
 .tabs .btn:hover{color:var(--text)}
-#panel{display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:linear-gradient(180deg,#171d29,#12161f);border-left:1px solid var(--line);min-height:0;overflow:hidden}
-.np .nt{font-weight:700;font-size:clamp(15px,2.3vh,24px);line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.np .nm{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:clamp(12px,1.7vh,16px);margin-top:3px;font-variant-numeric:tabular-nums}
+#panel{display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:linear-gradient(180deg,#171d29,#12161f);border-left:1px solid var(--line);min-height:0;overflow:hidden;text-align:center}
+.np .nt{font-weight:700;font-size:clamp(15px,2.3vh,24px);line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-align:center}
+.np .nm{display:flex;justify-content:center;gap:16px;color:var(--muted);font-size:clamp(12px,1.7vh,16px);margin-top:3px;font-variant-numeric:tabular-nums}
 .zonecard{border-radius:16px;padding:clamp(8px,1.5vh,18px) 16px;background:var(--z0);color:#10141b;transition:background-color .2s,color .2s,box-shadow .3s;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 10px 40px -10px var(--zone);text-align:center}
 .zonename{font-family:var(--disp);font-weight:900;font-size:clamp(50px,11vh,140px);line-height:.88;letter-spacing:.01em;text-transform:uppercase;text-shadow:0 2px 0 rgba(255,255,255,.15);white-space:nowrap;display:block}
 .zonelabel{font-weight:700;font-size:clamp(15px,2.5vh,28px);margin-top:.35em;line-height:1.15}
-.wtype{font-weight:700;font-size:clamp(12px,1.6vh,15px);color:#9fd0ff;margin-top:2px}
+.wtype{font-weight:800;font-size:clamp(16px,2.4vh,23px);color:#c9e6ff;margin-top:4px;letter-spacing:.01em;background:rgba(159,208,255,.14);border:1px solid rgba(159,208,255,.3);border-radius:999px;padding:5px 16px;display:inline-block}
+.wtype:empty{display:none}
 /* ---- peak-red effects: capped bursts on top of a long red segment, not the whole thing ---- */
 .zonecard.fire,.zonecard.tunnel{position:relative;overflow:hidden;isolation:isolate}
 .zonecard.fire::before{content:"";position:absolute;inset:-30%;z-index:0;background:conic-gradient(from 0deg,#ff3b3b,#ff9d1f,#ffcf4d,#ff3b3b,#ff7a1f,#ff3b3b);filter:blur(28px);opacity:.75;animation:firespin 1.3s linear infinite,firepulse .35s ease-in-out infinite alternate}
@@ -293,14 +299,20 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .strip i.fire{background:repeating-linear-gradient(45deg,#ff3b3b,#ff3b3b 4px,#ff9d1f 4px,#ff9d1f 8px)!important}
 .strip i.tunnel{background:repeating-linear-gradient(90deg,#ff3b3b,#ff3b3b 3px,#8a0000 3px,#8a0000 6px)!important}
 /* ---- whole-class progress bar, visible to the class ---- */
-#classProgress{position:absolute;left:0;right:0;bottom:0;height:7px;background:rgba(255,255,255,.08);z-index:17;pointer-events:none}
-#classProgress i{display:block;height:100%;width:0%;background:linear-gradient(90deg,var(--z1),var(--z2),var(--z3),var(--z4));box-shadow:0 0 12px -1px rgba(255,255,255,.4);transition:width .3s linear}
+/* The whole class, start to finish, as a single bar of real colored blocks (one per plan
+   segment across every song) so the instructor can see the shape of the intensity to come —
+   not just a plain percent-done fill. A translucent "glass" scrim grows over the part
+   already ridden, so done vs. still-to-come reads at a glance without losing the shape. */
+#classProgress{position:absolute;left:0;right:0;bottom:0;height:16px;background:rgba(255,255,255,.06);z-index:17;pointer-events:none;overflow:hidden;box-shadow:0 -1px 0 rgba(255,255,255,.08) inset}
+#classProgressBar{position:absolute;inset:0}
+#classProgressBar i{position:absolute;top:0;bottom:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 4px rgba(0,0,0,.25)}
+#classProgressDone{position:absolute;top:0;bottom:0;left:0;width:0%;background:rgba(6,9,14,.6);backdrop-filter:blur(1px);box-shadow:1px 0 0 rgba(255,255,255,.25);transition:width .3s linear}
 .zonecard.flash{animation:flash .45s ease-in-out 3}
 @keyframes flash{50%{filter:brightness(1.55) saturate(1.2);transform:scale(1.025)}}
-.timerrow{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
+.timerrow{display:flex;align-items:flex-end;justify-content:center;gap:14px}
 #timer{font-family:var(--disp);font-weight:800;font-size:clamp(58px,12.5vh,160px);line-height:.9;font-variant-numeric:tabular-nums;text-shadow:0 0 40px rgba(47,125,255,.25)}
 #timerMode{align-self:flex-start;margin-top:6px;font-size:clamp(12px,1.6vh,15px)}
-#callout{display:flex;align-items:center;gap:.18em;border-radius:14px;padding:8px 14px;background:var(--panel2);font-weight:700;font-size:clamp(15px,2.6vh,28px);line-height:1.15;box-shadow:var(--shadow-sm);flex-wrap:wrap}
+#callout{display:flex;align-items:center;justify-content:center;gap:.18em;border-radius:14px;padding:8px 14px;background:var(--panel2);font-weight:700;font-size:clamp(15px,2.6vh,28px);line-height:1.15;box-shadow:var(--shadow-sm);flex-wrap:wrap}
 #callout.long{font-size:clamp(14px,2.4vh,26px)}
 #callout .sw{width:.62em;height:.62em;border-radius:.14em;flex:none;background:var(--z0);box-shadow:0 0 12px -1px var(--zone-next)}
 #callout.hot{outline:3px solid var(--zone-next);animation:hot .5s ease-in-out infinite alternate}
@@ -334,7 +346,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 @keyframes edgepulse{0%,100%{opacity:1}50%{opacity:.3}}
 #ride.edgehot::after{animation:edgepulse .55s ease-in-out infinite}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.stat{background:linear-gradient(165deg,#232b3a,#1a2130);border:1px solid var(--card-border);border-radius:12px;padding:8px 12px;position:relative}
+.stat{background:linear-gradient(165deg,#232b3a,#1a2130);border:1px solid var(--card-border);border-radius:12px;padding:8px 12px;position:relative;text-align:center}
 .stat .k{display:block;color:var(--muted);font-size:clamp(11px,1.6vh,15px)}
 .stat .v{font-family:var(--disp);font-weight:800;font-size:clamp(28px,5.4vh,64px);line-height:1;font-variant-numeric:tabular-nums}
 .pulse{position:absolute;right:12px;top:12px;width:14px;height:14px;border-radius:50%;background:var(--zone);animation:beat var(--beat,.5s) ease-out infinite}
@@ -348,7 +360,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .hwseg span:last-child{font-variant-numeric:tabular-nums;opacity:.8;font-weight:500}
 #nowLine{position:absolute;left:0;right:0;height:0;border-top:3px solid #fff;box-shadow:0 0 14px rgba(255,255,255,.75);z-index:3}
 #nowLine span{position:absolute;right:8px;top:6px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);border-radius:4px;padding:1px 6px}
-.controls{display:flex;gap:6px;flex-wrap:wrap}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 .controls .btn{padding:7px 10px;font-size:clamp(12px,1.7vh,15px)}
 @media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum::before,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
 </style>
@@ -491,7 +503,10 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 
 <section id="ride" hidden>
   <div id="spectrumFrame" hidden></div>
-  <div id="classProgress" title="Progress through the whole class"><i id="classProgressFill"></i></div>
+  <div id="classProgress" title="The whole class, start to finish — dimmed part is done">
+    <div id="classProgressBar"></div>
+    <div id="classProgressDone"></div>
+  </div>
   <button id="rideExit" title="Exit class" aria-label="Exit class">&times;</button>
   <div id="stage"><div id="yt"></div><div id="cdLight" hidden aria-hidden="true"><span id="cdNum">5</span><em id="cdCue"></em></div><div id="mashupSaver" hidden>
     <div id="mashupArt"></div>
@@ -558,6 +573,11 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       <label>Song length<input id="fDur" type="text" placeholder="3:45"></label>
       <label class="span2"><span class="flab">Genre</span><div id="fGenre" class="chips" role="group" aria-label="Genre"></div></label>
       <label class="span2">Start plan at (seconds)<input id="fOff" type="number" min="0" max="240"><span class="wrnote" id="offNote"></span></label>
+      <div id="lCustomSegs" class="span2" hidden>
+        <span class="flab">Set the color bar yourself — no goal, no automatic timing</span>
+        <div id="fCustomSegs"></div>
+        <button type="button" class="btn" id="fAddSeg">+ Add block</button>
+      </div>
     </div>
     <div class="strip big" id="fStrip"></div>
     <div id="fInfo"></div>
@@ -586,6 +606,11 @@ const ZONES = [
   {k:'yellow',name:'Yellow', feel:'Hard',       color:'#ffd21f', ink:'#191400'},
   {k:'red',   name:'Red',    feel:'Maximum',    color:'#ff3b3b', ink:'#ffffff'}
 ];
+// The rider-facing "what's this segment" text, wherever it shows up in the ride view (the
+// rolling color bar, the pre-change countdown, the subtitle under the zone name). Ian didn't
+// want prescriptive phrases like "Hold the top" or "Ease down" — plain level numbers matching
+// the zone (white=1 ... red=5) so the instructor calls her own cues over it.
+function levelText(z,race){ return race ? 'Race' : 'Level '+(z+1); }
 // peak = hardest zone the goal uses, base = recovery zone, work/rest = default interval seconds
 const GOALS = {
   cooldown:  {label:'Cool down',      peak:1, base:0, work:40, rest:40},
@@ -593,7 +618,7 @@ const GOALS = {
   balanced:  {label:'Balanced',       peak:3, base:1, work:45, rest:30},
   high:      {label:'High intensity', peak:4, base:1, work:30, rest:45}
 };
-const STYLES = {interval:'Intervals', timetrial:'Time trial', race:'Race', pyramid:'Pyramid', climb:'Climb', recover:'Cool down'};
+const STYLES = {interval:'Intervals', timetrial:'Time trial', race:'Race', pyramid:'Pyramid', climb:'Climb', recover:'Cool down', custom:'Custom'};
 const GENRES = ['Pop','Hip-hop','R&B','Rock','House / EDM','Techno','Latin','Country','Disco / Throwback','Mashup / Remix','Other'];
 const GENRE_BPM = {'Pop':112,'Hip-hop':96,'R&B':92,'Rock':125,'House / EDM':126,'Techno':132,'Latin':100,'Country':106,'Disco / Throwback':118,'Mashup / Remix':122,'Other':118};
 const KEYWORDS = [
@@ -739,8 +764,20 @@ function tRecover(N){
   return zs.map((z,i)=>stp(z,us[i],labels[i]||'Recover',cues[i]||''));
 }
 
+// A fully manual bar: the instructor sets every block's color and length directly in the
+// Custom dialog, and nothing here reinterprets it — no capping, no phrase-snapping, no goal.
+// It's the escape hatch from letting the engine decide at all.
+function buildCustomPlan(o){
+  let acc = 0;
+  const segs = o.customSegs.map(cs=>{
+    const start = acc; acc += Math.max(5,+cs.dur||10);
+    return {z:clamp(Math.round(+cs.z||0),0,4), start, end:acc, label:'Custom', cue:'', race:false, effect:null};
+  });
+  return {segs, D:acc, off:0, unit:unitSec(60), style:'custom', goal:o.goal||'balanced', N:segs.length};
+}
 function buildPlan(t,o){
   o = o || {};
+  if(o.style==='custom' && Array.isArray(o.customSegs) && o.customSegs.length) return buildCustomPlan(o);
   const bpm = clamp(+t.bpm||120,60,200);
   let style = STYLES[o.style] ? o.style : 'interval';
   const off = Math.min(planOffset(t,style), Math.max(0,t.dur-30));
@@ -791,11 +828,15 @@ function quickPick(t,goal,bump){
   else {
     const D = t.dur-(t.offset||0), bpm = t.bpm||120;
     const dance = /EDM|Techno|Disco/.test(t.genre||'');
+    // Mid-tempo, moderate-length songs are the most common case, and used to fall through
+    // to a single hardcoded default (pyramid) almost every time — a three-way rotation
+    // keyed off the song's own id keeps picks varied without making them random/unstable.
+    const VARIED = ['pyramid','climb','interval'];
     if(D<150) style = 'timetrial';
     else if(bpm<100) style = D>=200 ? 'climb' : 'timetrial';
     else if(bpm>=140) style = (D>=230 && g==='high') ? 'race' : 'interval';
-    else if(D>=300) style = (t.uid%2) ? 'climb' : 'pyramid';
-    else style = dance ? 'interval' : 'pyramid';
+    else if(D>=300) style = VARIED[(t.uid||0)%VARIED.length];
+    else style = dance ? 'interval' : VARIED[(t.uid||0)%VARIED.length];
     if(bump){
       const i = ROTATION.indexOf(t.opts && t.opts.style ? t.opts.style : style);
       style = ROTATION[(Math.max(0,i)+bump)%ROTATION.length];
@@ -1310,7 +1351,11 @@ function goalForPosition(i,n){
   if(n===1) return 'balanced';
   if(i===n-1) return 'cooldown';         // always land soft
   if(i===n-2) return 'high';             // the big one, second to last
-  if(i===0) return 'endurance';          // open easy, let legs arrive
+  // Warm up for real: the opener stays mostly white/blue (cooldown's own peak is blue), and
+  // for a class long enough to have room for it, the second song eases up only as far as
+  // green before the class gets into its actual work.
+  if(i===0) return 'cooldown';
+  if(i===1 && n>=6) return 'endurance';
   const p = i/(n-2);                     // how far through the body of the class
   if(p<0.22) return 'endurance';         // warm up
   if(p<0.55) return 'balanced';          // heating up
@@ -1318,11 +1363,19 @@ function goalForPosition(i,n){
 }
 function autoPlanClass(list,force){
   const ts = list || tracks(), n = ts.length;
-  let recent = [], ivN = 0;               // recent = last two styles, ivN = interval songs so far
+  let recent = [], ivN = 0, lastStyle = null; // lastStyle = the immediately preceding song's style
   ts.forEach((t,i)=>{
-    if(t.manual && !force){ recent = [...recent, t.opts && t.opts.style].slice(-2); return; }
+    if(t.manual && !force){
+      recent = [...recent, t.opts && t.opts.style].slice(-2);
+      lastStyle = t.opts && t.opts.style;
+      return;
+    }
     if(force) t.manual = false;
-    const goal = goalForPosition(i,n);
+    let goal = goalForPosition(i,n);
+    // A race is a flat-out full-song effort with no built-in recovery of its own — whatever
+    // rides right after it should actually be a cool down, not whatever the class arc's
+    // position alone would have picked.
+    if(lastStyle==='race') goal = 'cooldown';
     const late = n<4 || i >= Math.floor(n*0.5);
     let o = quickPick(t,goal,0);
     // don't let the class repeat itself: skip a style used in either of the last two songs.
@@ -1345,6 +1398,7 @@ function autoPlanClass(list,force){
     }
     t.opts = o; t.qb = 0; rebuild(t);
     recent = [...recent, o.style].slice(-2);
+    lastStyle = o.style;
   });
 }
 
@@ -1883,7 +1937,43 @@ function setChip(el,v){
   });
 }
 const onChip = ()=>{ if(dT) syncDialog(); };
-chipGroup($('#fStyle'),[['auto','Quick pick'],...Object.entries(STYLES)],onChip);
+// The Custom style hands the whole bar to the instructor — no goal, no engine timing. Each
+// row is one block: a zone and a length in seconds, edited directly and previewed live in
+// the same strip the automatic styles use.
+let customSegs = [];
+function renderCustomSegs(){
+  $('#fCustomSegs').innerHTML = customSegs.map((cs,i)=>`
+    <div class="segrow" data-i="${i}">
+      <div class="chips">${ZONES.map((z,zi)=>`<button type="button" class="chip segz${zi===cs.z?' on':''}" data-z="${zi}"><i class="dot" style="background:${z.color}"></i>${z.name}</button>`).join('')}</div>
+      <span class="segdurwrap"><input type="number" class="segdur" min="5" max="600" step="5" value="${cs.dur}" aria-label="Block length, in seconds"> s</span>
+      <button type="button" class="btn seg-rm"${customSegs.length<=1?' disabled':''}>Remove</button>
+    </div>`).join('');
+}
+function seedCustomSegs(){
+  const segs = (dT.plan && dT.plan.segs && dT.plan.segs.length) ? dT.plan.segs : [{z:0,start:0,end:60}];
+  customSegs = segs.map(s=>({z:s.z, dur:Math.max(5,Math.round(s.end-s.start))}));
+  renderCustomSegs();
+}
+$('#fCustomSegs').addEventListener('click',e=>{
+  const zb = e.target.closest('.segz');
+  if(zb){ const i = +zb.closest('.segrow').dataset.i; customSegs[i].z = +zb.dataset.z; renderCustomSegs(); syncDialog(); return; }
+  const rm = e.target.closest('.seg-rm');
+  if(rm && customSegs.length>1){ const i = +rm.closest('.segrow').dataset.i; customSegs.splice(i,1); renderCustomSegs(); syncDialog(); }
+});
+$('#fCustomSegs').addEventListener('input',e=>{
+  const inp = e.target.closest('.segdur'); if(!inp) return;
+  const i = +inp.closest('.segrow').dataset.i;
+  customSegs[i].dur = clamp(+inp.value||10,5,600);
+  syncDialog();
+});
+$('#fAddSeg').onclick = ()=>{
+  customSegs.push({z:customSegs.length?customSegs[customSegs.length-1].z:0, dur:30});
+  renderCustomSegs(); syncDialog();
+};
+chipGroup($('#fStyle'),[['auto','Quick pick'],...Object.entries(STYLES)],v=>{
+  if(v==='custom' && !customSegs.length) seedCustomSegs();
+  onChip();
+});
 chipGroup($('#fGoal'),Object.entries(GOALS).map(([k,v])=>[k,v.label]),()=>{ wrTouched = false; onChip(); });
 chipGroup($('#fTT'),[['','Automatic'],...ZONES.map((z,i)=>[String(i),z.name,z.color])],onChip);
 chipGroup($('#fGenre'),GENRES.map(g=>[g,g]),onChip);
@@ -1905,13 +1995,16 @@ function dialogState(){
   const temp = {...dT, bpm:clamp(+$('#fBpm').value||dT.bpm,60,200), genre:$('#fGenre').value, offset: dT.offsetManual ? clamp(+$('#fOff').value||0,0,240) : 0, offsetManual:!!dT.offsetManual, dur:parseDur($('#fDur').value)||dT.dur};
   let o = {style,goal,ttZone:$('#fTT').value,workSec:$('#fWork').value,restSec:$('#fRest').value};
   if(style==='auto') o = {...o,...quickPick(temp,goal,0)};
+  if(style==='custom') o.customSegs = customSegs;
   return {temp,o};
 }
 function syncDialog(){
   const {temp,o} = dialogState();
-  $('#lGoal').hidden = o.style==='recover';
+  $('#lGoal').hidden = o.style==='recover' || o.style==='custom';
   $('#lTT').hidden = o.style!=='timetrial';
   $('#lWork').hidden = o.style!=='interval';
+  $('#lCustomSegs').hidden = o.style!=='custom';
+  if(o.style==='custom') renderCustomSegs();
   if(!wrTouched && o.style==='interval'){ const g = wrDefaults(); $('#fWork').value = g.work; $('#fRest').value = g.rest; }
   syncWR();
   const plan = buildPlan(temp,o);
@@ -1920,12 +2013,17 @@ function syncDialog(){
   if(!dT.offsetManual) $('#fOff').value = Math.round(plan.off);
   $('#offNote').textContent = dT.offsetManual ? 'Set by you.' : (plan.off>0 ? 'Chosen automatically for a time trial.' : 'Automatic.');
   let info = STYLES[plan.style]+', effort '+e.level+' of 5.';
-  if(plan.off>0) info += ' Starts at '+fmt(plan.off)+(plan.style==='timetrial' && !temp.offsetManual ? ' so the intro plays first.' : '.');
-  info += ' Steps snap to '+Math.round(unitSec(temp.bpm))+'-second phrases so changes land on the music.';
+  if(o.style==='custom') info = 'Custom, effort '+e.level+' of 5 — '+fmt(plan.D)+' total, set block by block above.';
+  else {
+    if(plan.off>0) info += ' Starts at '+fmt(plan.off)+(plan.style==='timetrial' && !temp.offsetManual ? ' so the intro plays first.' : '.');
+    info += ' Steps snap to '+Math.round(unitSec(temp.bpm))+'-second phrases so changes land on the music.';
+  }
   $('#fInfo').textContent = info;
 }
 function openDialog(t){
   dT = t; dTapTimes = [];
+  customSegs = (t.opts.style==='custom' && Array.isArray(t.opts.customSegs) && t.opts.customSegs.length)
+    ? t.opts.customSegs.map(s=>({...s})) : [];
   $('#dlgTitle').textContent = t.title;
   setChip($('#fGoal'), t.opts.goal||'balanced');
   setChip($('#fTT'), t.opts.ttZone==null?'':String(t.opts.ttZone));
@@ -2063,7 +2161,7 @@ function layoutHighway(){
   const D = t.plan.D; hwInner.style.height = (D*pps)+'px';
   hwInner.innerHTML = t.plan.segs.map((s,i)=>{
     const h = (s.end-s.start)*pps - 2, top = (D-s.end)*pps + 1, z = ZONES[s.z];
-    return `<div class="hwseg ${s.race?'spec':''}" data-i="${i}" style="top:${top}px;height:${Math.max(2,h)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${h>=26?`<span>${esc(s.label)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
+    return `<div class="hwseg ${s.race?'spec':''}" data-i="${i}" style="top:${top}px;height:${Math.max(2,h)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${h>=26?`<span>${levelText(s.z,s.race)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
   }).join('');
   $('#nowLine').style.top = nowY+'px';
   lastIdx = -2;
@@ -2105,7 +2203,32 @@ async function startClass(from){
   showRide();
   cur = clamp(from||0,0,ts.length-1); ended = false;
   zoneTime = {}; statsLastAt = null; statsShown = false;
+  buildClassProgressBar();
   await goToCurrent();
+}
+// The whole class laid out as real colored blocks in order — every song's lead-in (white,
+// same as the ride view itself) and every one of its plan segments — so the bottom bar shows
+// the actual shape of the class, not just a plain percentage. Built once per class: the
+// track list and every song's plan are both fixed for the run.
+function buildClassProgressBar(){
+  const wrap = $('#classProgressBar'); if(!wrap) return;
+  const ts = tracks();
+  const total = ts.reduce((a,t)=>a+(t.dur||0),0) || 1;
+  const block = (startAbs,dur,z,race) => {
+    if(dur<=0) return '';
+    const left = clamp(startAbs/total*100,0,100), width = clamp(dur/total*100,0,100-left);
+    const bg = race ? 'linear-gradient(90deg,#2f7dff,#8bdb1f,#ffd21f,#ff3b3b)' : ZONES[z].color;
+    return `<i style="left:${left}%;width:${width}%;background:${bg}"></i>`;
+  };
+  let cursor = 0, html = '';
+  ts.forEach(t=>{
+    const plan = t.plan;
+    if(!plan || !plan.segs || !plan.segs.length){ html += block(cursor,t.dur||0,0,false); cursor += t.dur||0; return; }
+    if(plan.off>0) html += block(cursor,plan.off,0,false);
+    plan.segs.forEach(s=>{ html += block(cursor+plan.off+s.start, s.end-s.start, s.z, !!s.race); });
+    cursor += t.dur||0;
+  });
+  wrap.innerHTML = html;
 }
 async function goToCurrent(){
   const t = tracks()[cur]; if(!t) return;
@@ -2192,7 +2315,7 @@ function frame(){
   const total = tracks().reduce((a,x)=>a+x.dur,0);
   setText('npClass','Class '+fmt(before+Math.min(time,t.dur))+' of '+fmt(total));
   setText('songLeft',fmtDown(Math.max(0,t.dur-time)));
-  if(total>0){ const cpf = $('#classProgressFill'); if(cpf) cpf.style.width = (clamp((before+Math.min(time,t.dur))/total,0,1)*100)+'%'; }
+  if(total>0){ const cpd = $('#classProgressDone'); if(cpd) cpd.style.width = (clamp((before+Math.min(time,t.dur))/total,0,1)*100)+'%'; }
 
   const card = $('#zoneCard'), callout = $('#callout');
   let idx = -1, curZoneKey = null;
@@ -2206,7 +2329,7 @@ function frame(){
       card.style.background = seg.race ? '' : z.color; card.style.color = seg.race ? '' : z.ink; setZoneVars(seg.z);
       card.classList.toggle('fire', seg.effect==='fire');
       card.classList.toggle('tunnel', seg.effect==='tunnel');
-      setZoneName(seg.race ? 'Race' : z.name); setText('zoneLabel',seg.label+(seg.cue?': '+seg.cue:''));
+      setZoneName(seg.race ? 'Race' : z.name); setText('zoneLabel',levelText(seg.z,seg.race));
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
       hwInner.querySelectorAll('.hwseg').forEach((el,i)=>el.classList.toggle('past',i<idx));
       lastIdx = idx;
@@ -2222,7 +2345,7 @@ function frame(){
       callout.classList.toggle('hot',isHot);
       callout.classList.remove('long');
       $('#ride').classList.toggle('edgehot',isHot);
-      setCountdown(isHot ? remain : null, next.cue);
+      setCountdown(isHot ? remain : null, levelText(next.z,next.race));
     } else {
       callout.classList.remove('hot');
       callout.classList.add('long');
