@@ -1688,7 +1688,18 @@ $('#tracks').addEventListener('click',e=>{
   // (t.manual) and the automatic class planner stops touching it.
   if(act==='quick'){ t.qb = (t.qb||0)+1; t.opts = quickPick(t,t.opts.goal||'balanced',t.qb>1?1:0); t.manual = true; rebuild(t); }
   else if(act==='auto'){ t.manual = false; autoPlanClass(ts); toast('Back on the automatic plan.'); }
-  else if(act==='custom'){ return openDialog(t); }
+  // The "Custom" quick-action on the card means "take me straight to the manual
+  // color-bar editor" — openDialog() alone reopens whatever style the song already
+  // has, so without forcing the style chip here, a song that wasn't already Custom
+  // (the common case) opened on its current automatic style with no color editor in
+  // sight, which read as "the colors can't be changed."
+  else if(act==='custom'){
+    openDialog(t);
+    setChip($('#fStyle'),'custom');
+    if(!customSegs.length) seedCustomSegs();
+    syncDialog();
+    return;
+  }
   else if(act==='half'){ t.bpm = clamp(Math.round(t.bpm/2),60,200); t.bpmSrc='manual'; rebuild(t); }
   else if(act==='double'){ t.bpm = clamp(Math.round(t.bpm*2),60,200); t.bpmSrc='manual'; rebuild(t); }
   else if(act==='del'){ ts.splice(i,1); autoPlanClass(ts); }
