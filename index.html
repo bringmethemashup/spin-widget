@@ -1676,6 +1676,7 @@ function trackHTML(t,i){
     </div>
     <div class="tacts">
       <button class="btn" data-act="quick">Quick build</button>
+      <button class="mini" data-act="edit" title="Open this song's plan, including per-block color editing">Edit</button>
       <button class="btn" data-act="custom">Custom</button>
       ${t.manual?'<button class="mini" data-act="auto" title="Hand this song back to the automatic class plan">Back to auto</button>':''}
       <div class="grp"><button class="tgrip" type="button" aria-label="Reorder ${esc(t.title)}, position ${i+1} of ${tracks().length}. Drag, or press the up and down arrow keys." title="Drag to reorder — or focus it and press ↑ / ↓">⠿</button><button class="mini" data-act="del" aria-label="Remove">Remove</button></div>
@@ -1709,6 +1710,11 @@ $('#tracks').addEventListener('click',e=>{
   // (t.manual) and the automatic class planner stops touching it.
   if(act==='quick'){ t.qb = (t.qb||0)+1; t.opts = quickPick(t,t.opts.goal||'balanced',t.qb>1?1:0); t.manual = true; rebuild(t); }
   else if(act==='auto'){ t.manual = false; autoPlanClass(ts); toast('Back on the automatic plan.'); }
+  // "Edit" opens the same dialog as "Custom" but leaves the style chip alone, so a
+  // standard automatic style (Cool down, Intervals, etc.) opens on itself — this is
+  // the only way in to the per-block color override, since forcing Custom (as the
+  // "Custom" button intentionally does) would throw the automatic timing away.
+  else if(act==='edit'){ openDialog(t); return; }
   // The "Custom" quick-action on the card means "take me straight to the manual
   // color-bar editor" — openDialog() alone reopens whatever style the song already
   // has, so without forcing the style chip here, a song that wasn't already Custom
