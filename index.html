@@ -329,12 +329,13 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
   -webkit-mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;
   mask:linear-gradient(#000,#000) content-box,linear-gradient(#000,#000);mask-composite:exclude;
   animation:spechue 4s linear infinite}
-.zonecard.spectrum{background:#0c1017;color:#fff;position:relative;overflow:hidden;isolation:isolate;box-shadow:0 0 0 1px rgba(255,255,255,.12) inset,0 14px 60px -12px #ff3b3b}
-.zonecard.spectrum::before{content:"";position:absolute;inset:-35%;z-index:0;
-  background:conic-gradient(from 0deg,#2f7dff,#2fd07a,#ffd21f,#ff3b3b,#ff7ad9,#2f7dff);
-  animation:specglow 5s linear infinite;opacity:.8}
-@keyframes specglow{from{filter:blur(34px) hue-rotate(0deg)}to{filter:blur(34px) hue-rotate(360deg)}}
-.zonecard.spectrum::after{content:"";position:absolute;inset:0;z-index:1;background:rgba(6,9,14,.76)}
+/* The old version blurred this gradient 34px and laid a 76%-opaque dark scrim on top of
+   it for text contrast — combined, that read as basically black instead of a rainbow.
+   This version puts the moving gradient directly on the card (crisp, not blurred) and
+   uses a much lighter scrim, just enough to keep the zone name legible. */
+.zonecard.spectrum{background:linear-gradient(120deg,#2f7dff,#2fd07a,#ffd21f,#ff3b3b,#ff7ad9,#2f7dff);background-size:300% 300%;color:#fff;position:relative;overflow:hidden;isolation:isolate;box-shadow:0 0 0 1px rgba(255,255,255,.12) inset,0 14px 60px -12px #ff3b3b;animation:specbgmove 6s linear infinite}
+@keyframes specbgmove{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+.zonecard.spectrum::after{content:"";position:absolute;inset:0;z-index:1;background:rgba(6,9,14,.32)}
 .zonecard.spectrum .zonename,.zonecard.spectrum .zonelabel{position:relative;z-index:2;text-shadow:0 2px 18px rgba(0,0,0,.85)}
 /* ---- glowing countdown light over the stage for the last 10 seconds ---- */
 #cdLight{position:absolute;left:50%;bottom:5%;transform:translateX(-50%);z-index:14;pointer-events:none;
@@ -368,7 +369,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #nowLine span{position:absolute;right:8px;top:6px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.55);border-radius:4px;padding:1px 6px}
 .controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 .controls .btn{padding:7px 10px;font-size:clamp(12px,1.7vh,15px)}
-@media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum::before,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
+@media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
 </style>
 </head>
 <body>
@@ -763,10 +764,20 @@ function tClimb(N,g){
   if(rec) steps.push(stp(Math.max(0,zs[0]-1 >= 0 ? zs[0]-1 : 0),rec,'Recover','Let it drop'));
   return steps;
 }
-function tRace(N){
-  // A race is just a glowing full-spectrum bar for the whole song — no zone intervals to
-  // call out, since the goal is to finish the distance, not hit a color.
-  return [stp(3,N,'Race','Race to the finish',true)];
+function tRace(N,us,g){
+  // A real race is a short, all-out effort — about 3 minutes — not the whole song at max
+  // spectrum. The first stretch is a normal-colored prep/build (not the spectrum) so riders
+  // aren't thrown straight into "race" cold, then the race itself is capped around 3 minutes,
+  // and anything left over after that eases back down rather than holding the effort forever.
+  const prepU = Math.max(1, Math.round(20/us));
+  const raceU = Math.max(1, Math.round(180/us));
+  if(N <= prepU+1) return [stp(3,N,'Race','Race to the finish',true)];
+  let left = N - prepU;
+  const raceLen = Math.min(raceU,left); left -= raceLen;
+  const steps = [stp(Math.max(0,(g&&g.base)||1),prepU,'Get ready','Build into the race')];
+  steps.push(stp(3,raceLen,'Race','Race to the finish',true));
+  if(left>0) steps.push(stp(0,left,'Recover','Ease off after the race'));
+  return steps;
 }
 function tRecover(N){
   const zs = N>=3 ? [2,1,0] : [1];
@@ -802,13 +813,16 @@ function buildPlan(t,o){
     case 'timetrial': steps = tTimetrial(N,g,o,D); break;
     case 'pyramid':   steps = tPyramid(N,g); break;
     case 'climb':     steps = tClimb(N,g); break;
-    case 'race':      steps = tRace(N); break;
+    case 'race':      steps = tRace(N,us,g); break;
     case 'recover':   steps = tRecover(N); break;
     default:          steps = tInterval(N,g,o,us);
   }
-  // Time trials and intervals are the styles that can hold a flat red for a long stretch
-  // (a pyramid/climb/race already shape their own peak briefly by design).
-  if(style==='interval' || style==='timetrial') steps = capRedSegments(steps,us);
+  // Red is capped at a minute regardless of the workout type — a pyramid/climb/race can
+  // still land a long flat stretch at the top depending on song length and goal, so the cap
+  // applies everywhere except Custom (fully hand-set, left alone) and the race's own
+  // spectrum segment (capRedSegments only ever touches z===4 red steps, which a race step
+  // never is — it's tagged .race, not zone 4 — so this is a no-op for the race block itself).
+  if(style!=='custom') steps = capRedSegments(steps,us);
   steps = mergeSteps(steps);
   const total = steps.reduce((a,s)=>a+s.u,0);
   let acc = 0;
@@ -1281,7 +1295,7 @@ let toastT;
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{el.hidden=true;},3600); }
 
 // ---------- state ----------
-const store = {tracks:[], apiKey:'', keyOK:false, countUp:true, look:150, playlists:[], currentId:null, classLen:45, theme:''};
+const store = {tracks:[], apiKey:'', keyOK:false, countUp:true, look:90, playlists:[], currentId:null, classLen:45, theme:''};
 function save(){ try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){} }
 function loadStore(){
   try{
@@ -2279,11 +2293,22 @@ function setZoneName(val){ const changed = cache.zoneName!==val; setText('zoneNa
 function layoutHighway(){
   const t = tracks()[cur]; if(!t) return;
   const H = hw.clientHeight || 300; nowY = H*0.78; pps = nowY/store.look;
-  const D = t.plan.D; hwInner.style.height = (D*pps)+'px';
-  hwInner.innerHTML = t.plan.segs.map((s,i)=>{
+  const D = t.plan.D, off = t.plan.off||0;
+  // A time trial's white intro (the lead-in before the plan starts) is real ride time,
+  // and the "now" line already passes through it — so the rolling bar needs to include it
+  // too, not just the strip in the Creator. Same top(t)=(D-t)*pps coordinate space as the
+  // segments below, just extended backward past 0 to -off.
+  hwInner.style.height = ((D+off)*pps)+'px';
+  let html = '';
+  if(off>0){
+    const h = off*pps - 2, top = D*pps + 1;
+    html += `<div class="hwseg lead" style="top:${top}px;height:${Math.max(2,h)}px;background:${ZONES[0].color};color:${ZONES[0].ink}">${h>=26?`<span>Intro</span><span>${fmt(off)}</span>`:''}</div>`;
+  }
+  html += t.plan.segs.map((s,i)=>{
     const h = (s.end-s.start)*pps - 2, top = (D-s.end)*pps + 1, z = ZONES[s.z];
     return `<div class="hwseg ${s.race?'spec':''}" data-i="${i}" style="top:${top}px;height:${Math.max(2,h)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${h>=26?`<span>${levelText(s.z,s.race)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
   }).join('');
+  hwInner.innerHTML = html;
   $('#nowLine').style.top = nowY+'px';
   lastIdx = -2;
 }
@@ -2456,9 +2481,14 @@ function frame(){
       card.style.background = seg.race ? '' : z.color; card.style.color = seg.race ? '' : z.ink; setZoneVars(seg.z);
       card.classList.toggle('fire', seg.effect==='fire');
       card.classList.toggle('tunnel', seg.effect==='tunnel');
-      setZoneName(seg.race ? 'Race' : z.name); setText('zoneLabel',levelText(seg.z,seg.race));
+      // The big name already says "Race" — the sub-label under it should say something
+      // else, not repeat the same word back.
+      setZoneName(seg.race ? 'Race' : z.name); setText('zoneLabel', seg.race ? (seg.cue||'Race to the finish') : levelText(seg.z,seg.race));
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
-      hwInner.querySelectorAll('.hwseg').forEach((el,i)=>el.classList.toggle('past',i<idx));
+      // :not(.lead) — the intro block (if any) isn't one of the indexed plan segments, so
+      // it has to be excluded here or every real segment's "past" index would be off by one.
+      hwInner.querySelectorAll('.hwseg:not(.lead)').forEach((el,i)=>el.classList.toggle('past',i<idx));
+      if(plan.off>0) hwInner.querySelector('.hwseg.lead')?.classList.add('past');
       lastIdx = idx;
     }
     setText('timer', store.countUp ? fmtUp(elapsed) : fmtDown(remain));
@@ -2571,7 +2601,7 @@ $('#cVidToggle').onclick = async ()=>{
     if(mashupAudio) mashupAudio.play().catch(()=>{});
   }
 };
-$('#cLook').addEventListener('change', ()=>{ store.look = clamp(+$('#cLook').value||150,45,240); save(); layoutHighway(); });
+$('#cLook').addEventListener('change', ()=>{ store.look = clamp(+$('#cLook').value||90,45,240); save(); layoutHighway(); });
 $('#timerMode').onclick = ()=>{ store.countUp = !store.countUp; $('#timerMode').textContent = store.countUp?'Counting up':'Counting down'; save(); };
 $('#cFull').onclick = ()=>toggleFull();
 $('#cBack').onclick = exitRide;
@@ -2823,7 +2853,7 @@ $('#rideExit').onclick = exitRide;
 $('#brandbar').innerHTML = $('#brandbar2').innerHTML = ZONES.map(z=>`<i style="background:${z.color}"></i>`).join('');
 $('#apiKey').value = store.apiKey || '';
 syncSetupVis();
-$('#cLook').value = String(clamp(+store.look||150,45,240));
+$('#cLook').value = String(clamp(+store.look||90,45,240));
 $('#classLen').value = store.classLen || 45;
 renderThemeChip();
 $('#timerMode').textContent = store.countUp?'Counting up':'Counting down';
