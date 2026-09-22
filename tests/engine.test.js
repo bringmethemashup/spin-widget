@@ -239,14 +239,18 @@ check('whatever follows a race is a real cool down, not whatever position alone 
 });
 check('a high-intensity sweep spends its time up top, not back down in the easy zones', () => {
   // A climb is allowed a short Recover tail after the summit; what matters is that the song
-  // as a whole stays hard, which is what a full sweep to zone 1 used to ruin.
+  // as a whole stays hard, which is what a full sweep to zone 1 used to ruin. The threshold
+  // is lower than it used to be because red is now capped at a minute on every style
+  // (including pyramid/climb, not just interval/timetrial) — a long, high-BPM climb's
+  // "Summit" can now force a genuine forced-recovery tail after that minute of red, which
+  // eats into the working percentage but is the correct, intended tradeoff (see capRedSegments).
   for(const style of ['pyramid','climb']){
     for(const dur of [210, 300, 420]){
       const p = buildPlan(song({ dur }), { style, goal:'high' });
       const total = p.segs.reduce((a,s) => a + (s.end - s.start), 0);
       const working = p.segs.filter(s => s.z >= 2).reduce((a,s) => a + (s.end - s.start), 0);
       const pct = working / total;
-      ok(pct >= 0.8, style+' at '+dur+'s spends only '+Math.round(pct*100)+'% of a high-intensity song at zone 2+');
+      ok(pct >= 0.7, style+' at '+dur+'s spends only '+Math.round(pct*100)+'% of a high-intensity song at zone 2+');
       ok(Math.max(...p.segs.map(s=>s.z)) >= GOALS.high.peak, style+' at '+dur+'s never reaches the goal peak');
     }
   }
@@ -385,11 +389,17 @@ check('a short red stretch is left alone (nothing to cap)', () => {
   const p = buildPlan(song({dur:60,bpm:120}), {style:'timetrial', goal:'high', ttZone:4});
   ok(!p.segs.some(s=>s.effect), 'a short time trial should not trigger ring of fire / tunnel');
 });
-check('a race is one continuous spectrum segment for the whole song, no intervals', () => {
+check('a race has a normal-colored prep block, then one spectrum segment capped near 3 minutes', () => {
+  // A real race is a short, all-out effort (~3 min), not the whole song at spectrum. The
+  // first block is a plain, non-race prep/build so riders aren't thrown into "race" cold,
+  // and anything left over after the capped race eases back down instead of holding forever.
   for(const dur of [120, 210, 300]){
     const p = buildPlan(song({dur, bpm:150}), {style:'race', goal:'high'});
-    eq(p.segs.length, 1, 'a race should be a single segment');
-    ok(p.segs[0].race, 'the race segment should be flagged race');
+    ok(!p.segs[0].race, 'the first block should be a plain prep, not the race spectrum');
+    const raceSegs = p.segs.filter(s=>s.race);
+    eq(raceSegs.length, 1, 'exactly one race segment');
+    const raceLen = raceSegs[0].end - raceSegs[0].start;
+    ok(raceLen <= 185, 'the race segment should be capped near 3 minutes, got '+Math.round(raceLen)+'s');
   }
 });
 check('interval cues are left to the instructor — no prescriptive voice lines', () => {
