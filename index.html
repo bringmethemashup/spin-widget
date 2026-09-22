@@ -170,6 +170,8 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .strip{display:flex;height:16px;gap:1px;border-radius:5px;overflow:hidden;background:#0c1017;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
 .strip.big{height:30px;margin:14px 0 8px}
 .strip i{display:block;min-width:2px;filter:saturate(1.08)}
+.strip i.segclick{cursor:pointer;transition:filter .1s,outline-color .1s}
+.strip i.segclick:hover{filter:saturate(1.08) brightness(1.18);outline:2px solid rgba(255,255,255,.65);outline-offset:-2px}
 /* race steps read as a moving full spectrum, not one flat zone colour */
 .strip i.spec,.hwseg.spec{background:linear-gradient(90deg,#2f7dff,#2fd07a,#ffd21f,#ff3b3b,#ff7ad9,#2f7dff)!important;background-size:260% 100%!important;animation:specslide 5s linear infinite}
 @keyframes specslide{to{background-position:260% 0}}
@@ -303,10 +305,14 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
    segment across every song) so the instructor can see the shape of the intensity to come —
    not just a plain percent-done fill. A translucent "glass" scrim grows over the part
    already ridden, so done vs. still-to-come reads at a glance without losing the shape. */
-#classProgress{position:absolute;left:0;right:0;bottom:0;height:16px;background:rgba(255,255,255,.06);z-index:17;pointer-events:none;overflow:hidden;box-shadow:0 -1px 0 rgba(255,255,255,.08) inset}
+#classProgress{position:absolute;left:0;right:0;bottom:0;height:clamp(28px,4.2vh,40px);background:rgba(255,255,255,.06);z-index:17;pointer-events:none;overflow:hidden;box-shadow:0 -1px 0 rgba(255,255,255,.08) inset;display:flex;align-items:center;justify-content:center}
 #classProgressBar{position:absolute;inset:0}
 #classProgressBar i{position:absolute;top:0;bottom:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 4px rgba(0,0,0,.25)}
 #classProgressDone{position:absolute;top:0;bottom:0;left:0;width:0%;background:rgba(6,9,14,.6);backdrop-filter:blur(1px);box-shadow:1px 0 0 rgba(255,255,255,.25);transition:width .3s linear}
+/* Elapsed/total + time-remaining, centered on the bar itself so position and exact time
+   read as one glance instead of two disconnected pieces (the bar, and the small class-time
+   text up in the side panel). */
+#classProgressLabel{position:relative;z-index:2;color:#fff;font-weight:800;font-size:clamp(12px,1.6vh,16px);font-variant-numeric:tabular-nums;letter-spacing:.02em;text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 10px rgba(0,0,0,.6);pointer-events:none;white-space:nowrap}
 .zonecard.flash{animation:flash .45s ease-in-out 3}
 @keyframes flash{50%{filter:brightness(1.55) saturate(1.2);transform:scale(1.025)}}
 .timerrow{display:flex;align-items:flex-end;justify-content:center;gap:14px}
@@ -506,6 +512,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
   <div id="classProgress" title="The whole class, start to finish — dimmed part is done">
     <div id="classProgressBar"></div>
     <div id="classProgressDone"></div>
+    <div id="classProgressLabel"></div>
   </div>
   <button id="rideExit" title="Exit class" aria-label="Exit class">&times;</button>
   <div id="stage"><div id="yt"></div><div id="cdLight" hidden aria-hidden="true"><span id="cdNum">5</span><em id="cdCue"></em></div><div id="mashupSaver" hidden>
@@ -580,6 +587,10 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       </div>
     </div>
     <div class="strip big" id="fStrip"></div>
+    <div class="row" style="justify-content:space-between;align-items:center;margin:-6px 0 8px">
+      <span class="wrnote" id="fStripHint" hidden>Click any block above to change just its color — everything else about this song's plan stays automatic.</span>
+      <button type="button" class="mini" id="fResetColors" hidden>Reset colors</button>
+    </div>
     <div id="fInfo"></div>
     <div class="row end">
       <button class="btn" id="fCancel" type="button">Cancel</button>
@@ -806,6 +817,13 @@ function buildPlan(t,o){
     const end = i===steps.length-1 ? D : acc/total*D;
     return {z:s.z,start,end,label:s.label,cue:s.cue,race:!!s.race,effect:s.effect||null};
   });
+  // A hand-picked color on one block of an otherwise-automatic plan (set from the per-song
+  // dialog by clicking a block in the preview bar) — everything else about the plan (goal,
+  // timing, style) stays exactly as the engine chose it. Keyed by this segs array's own
+  // index, which is why it's applied last, after merging.
+  if(o.colorOverrides) for(const k in o.colorOverrides){
+    const seg = segs[+k]; if(seg) seg.z = clamp(+o.colorOverrides[k],0,4);
+  }
   return {segs,D,off,unit:us,style,goal:o.goal||'balanced',N};
 }
 
@@ -1621,13 +1639,16 @@ async function addLink(){
 }
 
 // ---------- build view rendering ----------
-function stripHTML(segs,D,off){
+function stripHTML(segs,D,off,interactive){
   // A time trial doesn't start on the downbeat — the plan skips the intro. Show that
   // lead-in as white at the head of the bar so the shape matches what actually happens.
   const lead = (+off > 0)
     ? `<i class="lead" style="flex:${(+off).toFixed(2)};background:${ZONES[0].color}" title="Intro: ride easy for the first ${fmt(+off)}"></i>`
     : '';
-  return lead + segs.map(s=>`<i class="${s.race?'spec':(s.effect||'')}" style="flex:${(s.end-s.start).toFixed(2)};background:${ZONES[s.z].color}" title="${s.race?'Race':ZONES[s.z].name}: ${esc(s.label)}"></i>`).join('');
+  // interactive: used only by the per-song dialog's preview bar, so a standard style
+  // (Cool down, Intervals, ...) can still have one block's color overridden by hand without
+  // giving up the automatic timing/goal — full manual timing is what the Custom style is for.
+  return lead + segs.map((s,i)=>`<i class="${s.race?'spec':(s.effect||'')}${interactive?' segclick':''}"${interactive?` data-idx="${i}"`:''} style="flex:${(s.end-s.start).toFixed(2)};background:${ZONES[s.z].color}" title="${interactive?'Click to change this block’s color — currently ':''}${s.race?'Race':ZONES[s.z].name}: ${esc(s.label)}"></i>`).join('');
 }
 function pipsHTML(level){
   let h=''; for(let i=1;i<=5;i++) h += `<i style="${i<=level?'background:'+ZONES[level-1].color:''}"></i>`; return h;
@@ -2013,6 +2034,10 @@ const onChip = ()=>{ if(dT) syncDialog(); };
 // row is one block: a zone and a length in seconds, edited directly and previewed live in
 // the same strip the automatic styles use.
 let customSegs = [];
+// A single block recolored by hand on an otherwise-automatic style (Cool down, Intervals, ...)
+// — {segIndex: zoneIndex}. Cleared whenever Style or Goal changes, since either can reshape
+// the block layout enough that old indices would land on the wrong block.
+let colorOverrides = {};
 function renderCustomSegs(){
   $('#fCustomSegs').innerHTML = customSegs.map((cs,i)=>`
     <div class="segrow" data-i="${i}">
@@ -2044,9 +2069,10 @@ $('#fAddSeg').onclick = ()=>{
 };
 chipGroup($('#fStyle'),[['auto','Quick pick'],...Object.entries(STYLES)],v=>{
   if(v==='custom' && !customSegs.length) seedCustomSegs();
+  colorOverrides = {};
   onChip();
 });
-chipGroup($('#fGoal'),Object.entries(GOALS).map(([k,v])=>[k,v.label]),()=>{ wrTouched = false; onChip(); });
+chipGroup($('#fGoal'),Object.entries(GOALS).map(([k,v])=>[k,v.label]),()=>{ wrTouched = false; colorOverrides = {}; onChip(); });
 chipGroup($('#fTT'),[['','Automatic'],...ZONES.map((z,i)=>[String(i),z.name,z.color])],onChip);
 chipGroup($('#fGenre'),GENRES.map(g=>[g,g]),onChip);
 
@@ -2068,6 +2094,7 @@ function dialogState(){
   let o = {style,goal,ttZone:$('#fTT').value,workSec:$('#fWork').value,restSec:$('#fRest').value};
   if(style==='auto') o = {...o,...quickPick(temp,goal,0)};
   if(style==='custom') o.customSegs = customSegs;
+  else if(Object.keys(colorOverrides).length) o.colorOverrides = {...colorOverrides};
   return {temp,o};
 }
 function syncDialog(){
@@ -2080,7 +2107,10 @@ function syncDialog(){
   if(!wrTouched && o.style==='interval'){ const g = wrDefaults(); $('#fWork').value = g.work; $('#fRest').value = g.rest; }
   syncWR();
   const plan = buildPlan(temp,o);
-  $('#fStrip').innerHTML = stripHTML(plan.segs,plan.D,plan.off);
+  const canRecolor = o.style!=='custom';
+  $('#fStrip').innerHTML = stripHTML(plan.segs,plan.D,plan.off,canRecolor);
+  $('#fStripHint').hidden = !canRecolor;
+  $('#fResetColors').hidden = !Object.keys(colorOverrides).length;
   const e = effort(plan.segs);
   if(!dT.offsetManual) $('#fOff').value = Math.round(plan.off);
   $('#offNote').textContent = dT.offsetManual ? 'Set by you.' : (plan.off>0 ? 'Chosen automatically for a time trial.' : 'Automatic.');
@@ -2089,13 +2119,26 @@ function syncDialog(){
   else {
     if(plan.off>0) info += ' Starts at '+fmt(plan.off)+(plan.style==='timetrial' && !temp.offsetManual ? ' so the intro plays first.' : '.');
     info += ' Steps snap to '+Math.round(unitSec(temp.bpm))+'-second phrases so changes land on the music.';
+    if(Object.keys(colorOverrides).length) info += ' '+Object.keys(colorOverrides).length+' block'+(Object.keys(colorOverrides).length>1?'s':'')+' recolored by hand.';
   }
   $('#fInfo').textContent = info;
 }
+$('#fStrip').addEventListener('click',e=>{
+  if(!dT) return;
+  const b = e.target.closest('[data-idx]'); if(!b) return;
+  const idx = +b.dataset.idx;
+  const {temp,o} = dialogState();
+  if(o.style==='custom') return;
+  const seg = buildPlan(temp,o).segs[idx]; if(!seg) return;
+  colorOverrides[idx] = (seg.z+1)%ZONES.length;
+  syncDialog();
+});
+$('#fResetColors').onclick = ()=>{ colorOverrides = {}; syncDialog(); };
 function openDialog(t){
   dT = t; dTapTimes = [];
   customSegs = (t.opts.style==='custom' && Array.isArray(t.opts.customSegs) && t.opts.customSegs.length)
     ? t.opts.customSegs.map(s=>({...s})) : [];
+  colorOverrides = (t.opts.style!=='custom' && t.opts.colorOverrides) ? {...t.opts.colorOverrides} : {};
   $('#dlgTitle').textContent = t.title;
   setChip($('#fGoal'), t.opts.goal||'balanced');
   setChip($('#fTT'), t.opts.ttZone==null?'':String(t.opts.ttZone));
@@ -2387,7 +2430,13 @@ function frame(){
   const total = tracks().reduce((a,x)=>a+x.dur,0);
   setText('npClass','Class '+fmt(before+Math.min(time,t.dur))+' of '+fmt(total));
   setText('songLeft',fmtDown(Math.max(0,t.dur-time)));
-  if(total>0){ const cpd = $('#classProgressDone'); if(cpd) cpd.style.width = (clamp((before+Math.min(time,t.dur))/total,0,1)*100)+'%'; }
+  if(total>0){
+    const soFar = before+Math.min(time,t.dur);
+    const cpd = $('#classProgressDone'); if(cpd) cpd.style.width = (clamp(soFar/total,0,1)*100)+'%';
+    // Elapsed / total right on the bar itself, so where-we-are and exactly-how-long-left
+    // read as one glance at the bottom of the screen instead of two separate widgets.
+    const lbl = $('#classProgressLabel'); if(lbl) lbl.textContent = fmt(soFar)+' of '+fmt(total)+' — '+fmtDown(Math.max(0,total-soFar))+' left';
+  }
 
   const card = $('#zoneCard'), callout = $('#callout');
   let idx = -1, curZoneKey = null;
