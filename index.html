@@ -176,6 +176,17 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
    whole editor. Drag a boundary to retime, click a block to cycle its color, double-click to
    split, hover a boundary for a × to remove it. */
 #fStrip{position:relative;height:56px;margin:14px 0 8px;border-radius:10px;overflow:visible;background:#0c1017;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.fsplayhead{position:absolute;top:-6px;bottom:-6px;width:2px;background:#fff;box-shadow:0 0 6px rgba(255,255,255,.85);pointer-events:none;z-index:3;display:none}
+/* Item 27 follow-up: an inline media preview so Ian can listen/watch while placing boundaries,
+   instead of guessing by eye. YouTube gets a real IFrame API player (controls:1, so he can
+   scrub); mashups get a plain <audio> element off the same pCloud-resolve path the ride screen
+   already uses. Both drive the #fsplayhead line above via a polled currentTime. */
+#fMediaWrap{margin:2px 0 12px}
+#fMediaBox{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+#fYt{position:absolute;inset:0}
+#fYt iframe{width:100%;height:100%;display:block}
+#fAudioPlayer{width:100%;margin-top:2px}
+#fMediaControls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .fsblock{position:absolute;top:0;bottom:0;cursor:pointer;filter:saturate(1.08);transition:filter .1s;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;border-radius:2px}
 .fsblock:hover{filter:saturate(1.08) brightness(1.15)}
 .fsblock span{font-size:11px;font-weight:700;color:rgba(0,0,0,.55);text-shadow:0 1px 0 rgba(255,255,255,.2);pointer-events:none;white-space:nowrap}
@@ -696,6 +707,18 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
          style freezes that style's current shape into customSegs and switches Style to Custom
          behind the scenes — reusing the existing buildCustomPlan() escape hatch — so "Reset to
          automatic" can always get back to what the picked style would generate on its own. -->
+    <!-- Follow-up: an inline player so Ian can hear/see the song while placing boundaries, plus
+         (mashups only, since a page can't read YouTube's raw audio) a one-click energy-based
+         suggestion to start from instead of a blank bar. -->
+    <div id="fMediaWrap" hidden>
+      <div id="fMediaBox" hidden><div id="fYt"></div></div>
+      <audio id="fAudioPlayer" controls hidden></audio>
+      <div id="fMediaControls">
+        <button type="button" class="mini" id="fMarkHere">+ Add boundary here</button>
+        <button type="button" class="mini" id="fAutoDetect" hidden>Auto-detect from audio ▸</button>
+        <span class="wrnote" id="fMediaNote"></span>
+      </div>
+    </div>
     <div class="strip big" id="fStrip"></div>
     <div class="row" style="justify-content:space-between;align-items:center;margin:-6px 0 8px">
       <span class="wrnote" id="fStripHint">Click a block to change its color. Drag a boundary to retime it. Double-click a block to split it. Hover a boundary for a × to remove it.</span>
@@ -2274,7 +2297,29 @@ function renderFStrip(){
     acc += blocks[i].dur;
     html += `<div class="fshandle" data-idx="${i}" style="left:${acc/total*100}%"><button type="button" class="fshandlerm" data-rm="${i}" title="Remove this boundary — merges the two blocks">&times;</button></div>`;
   }
+  html += '<div id="fPlayhead" class="fsplayhead"></div>';
   strip.innerHTML = html;
+  updatePlayhead(fLastCt);
+}
+// The strip's own total (blocks total, not the raw media duration) is what the playhead's
+// left% is computed against, so the line lines up with the blocks even if the media's reported
+// duration is off by a second or two from the song length the plan was built for.
+function currentStripTotalSec(){
+  const {temp,o} = dialogState();
+  if(o.style==='custom') return fsTotalSec();
+  const plan = buildPlan(temp,o);
+  let t = plan.off>0 ? plan.off : 0;
+  plan.segs.forEach(s=>t += Math.max(1,s.end-s.start));
+  return t || 1;
+}
+let fLastCt = 0;
+function updatePlayhead(ct){
+  fLastCt = ct||0;
+  const ph = $('#fPlayhead'); if(!ph) return;
+  if(!fMediaActive){ ph.style.display = 'none'; return; }
+  const total = currentStripTotalSec();
+  ph.style.left = clamp(fLastCt/total*100,0,100)+'%';
+  ph.style.display = 'block';
 }
 // The first drag/click/split/merge on a non-Custom style's bar freezes its current shape into
 // customSegs and switches Style to Custom — after that, further edits work straight on
@@ -2371,6 +2416,126 @@ $('#fResetCustom').onclick = ()=>{
   syncDialog();
 };
 
+// ===== item 27 follow-up: listen/watch inline while placing boundaries =====
+// Ian: "I'd love for it to be intuitive enough to do that [find the chorus]... either by
+// reviewing the audio, or searching online resources, or something else." No public API
+// reliably maps a YouTube id or a mashup to its own chorus/drop timestamps, so this plays it
+// straight: a real inline player he can scrub and listen to (works for both track kinds), plus
+// a "+ Add boundary here" button that splits the bar exactly where the playhead is — the
+// dragging he already likes, just informed by his own ear instead of a guess. For mashups only
+// (their audio file is actually readable client-side; YouTube's isn't) there's also a one-click
+// energy-jump auto-suggestion as a starting point, clearly framed as a rough guess to refine.
+let fYtPlayer = null, fPlayheadIv = null, fMediaActive = false;
+function teardownFMedia(){
+  fMediaActive = false;
+  if(fPlayheadIv){ clearInterval(fPlayheadIv); fPlayheadIv = null; }
+  if(fYtPlayer){ try{ fYtPlayer.destroy(); }catch(e){} fYtPlayer = null; }
+  $('#fYt').innerHTML = '';
+  $('#fMediaBox').hidden = true;
+  const a = $('#fAudioPlayer'); try{ a.pause(); }catch(e){} a.removeAttribute('src'); try{ a.load(); }catch(e){}
+  a.hidden = true;
+  $('#fAutoDetect').hidden = true;
+  $('#fMediaNote').textContent = '';
+  $('#fMediaWrap').hidden = true;
+  updatePlayhead(0);
+}
+async function setupFMedia(t){
+  teardownFMedia();
+  if(t.kind==='youtube' && t.id){
+    $('#fMediaWrap').hidden = false;
+    $('#fMediaBox').hidden = false;
+    $('#fMediaNote').textContent = 'Play the video, then use "Add boundary here" right where it escalates.';
+    try{
+      await loadYT();
+      if(!dT || dT.uid!==t.uid) return; // dialog moved on while the API was loading
+      fYtPlayer = new YT.Player('fYt',{host:YT_HOST,width:'100%',height:'100%',videoId:t.id,playerVars:{controls:1,rel:0}});
+      fMediaActive = true;
+      fPlayheadIv = setInterval(()=>{
+        if(!fYtPlayer || !fYtPlayer.getCurrentTime) return;
+        let ct = 0; try{ ct = fYtPlayer.getCurrentTime(); }catch(e){}
+        updatePlayhead(ct);
+      },200);
+    }catch(e){ $('#fMediaNote').textContent = "Couldn't load the video preview."; }
+  } else if(t.kind==='mashup' && t.audioLink){
+    $('#fMediaWrap').hidden = false;
+    const a = $('#fAudioPlayer'); a.hidden = false;
+    $('#fAutoDetect').hidden = false;
+    $('#fMediaNote').textContent = 'Play it and use "Add boundary here," or try auto-detect for a starting guess.';
+    fMediaActive = true;
+    fPlayheadIv = setInterval(()=>{ updatePlayhead(a.currentTime||0); },200);
+    try{ a.src = await resolvePcloudUrl(t.audioLink); }
+    catch(e){ $('#fMediaNote').textContent = "Couldn't load the audio preview."; }
+  } else {
+    $('#fMediaWrap').hidden = true;
+  }
+}
+$('#fMarkHere').onclick = ()=>{
+  if(!dT || !fMediaActive) return;
+  let ct = fLastCt;
+  const segs = fsEnsureCustom();
+  let acc = 0, idx = -1, localOffset = 0;
+  for(let i=0;i<segs.length;i++){
+    if(ct < acc+segs[i].dur){ idx = i; localOffset = ct-acc; break; }
+    acc += segs[i].dur;
+  }
+  if(idx<0){ toast('Play the track a bit first, then try again.'); return; }
+  if(localOffset<5 || segs[idx].dur-localOffset<5){ toast('Too close to an existing boundary — move the playhead a little further in.'); return; }
+  const s = segs[idx];
+  segs.splice(idx,1,{z:s.z,dur:Math.round(localOffset)},{z:s.z,dur:Math.round(s.dur-localOffset)});
+  syncDialog();
+};
+// A rough onset detector, not real chorus/section recognition: 1s energy windows, smoothed,
+// boundaries where energy jumps meaningfully above its recent level, at least 20s apart, capped
+// at 7 so the bar stays usable. It's a starting guess Ian drags/recolors from — not a claim
+// about where the actual drop is.
+function detectEnergyBoundaries(audioBuf){
+  const sr = audioBuf.sampleRate, ch0 = audioBuf.getChannelData(0);
+  const win = Math.max(1,Math.round(sr*1));
+  const n = Math.floor(ch0.length/win);
+  if(n<6) return [];
+  const energy = new Array(n);
+  for(let i=0;i<n;i++){
+    let sum=0; const start=i*win;
+    for(let j=0;j<win;j++){ const v = ch0[start+j]; sum += v*v; }
+    energy[i] = Math.sqrt(sum/win);
+  }
+  const sm = energy.map((v,i)=>(energy[Math.max(0,i-1)]+v+energy[Math.min(n-1,i+1)])/3);
+  const maxE = Math.max(...sm,1e-6);
+  const boundaries = []; let last = -20;
+  for(let i=2;i<n-1;i++){
+    if(sm[i]-sm[i-2] > maxE*0.18 && i-last>=20){ boundaries.push(i); last = i; }
+  }
+  return boundaries.slice(0,7);
+}
+$('#fAutoDetect').onclick = async ()=>{
+  if(!dT || dT.kind!=='mashup' || !dT.audioLink) return;
+  const btn = $('#fAutoDetect'); btn.disabled = true; btn.textContent = 'Analyzing…';
+  try{
+    const url = await resolvePcloudUrl(dT.audioLink);
+    const buf = await (await fetch(url)).arrayBuffer();
+    const ctx = new (window.AudioContext||window.webkitAudioContext)();
+    const audioBuf = await ctx.decodeAudioData(buf);
+    try{ ctx.close(); }catch(e){}
+    if(!dT || dT.kind!=='mashup') return; // dialog moved on while this was running
+    const bTimes = detectEnergyBoundaries(audioBuf).map(i=>i);
+    if(!bTimes.length){ toast('No clear energy jumps found — try marking it by ear instead.'); return; }
+    const segs = []; let prev = 0;
+    [...bTimes, Math.round(audioBuf.duration)].forEach((t,i)=>{
+      segs.push({z: i===0?0:Math.min(4,i+1), dur: Math.max(5,Math.round(t-prev))}); prev = t;
+    });
+    origStyle = (dT.opts.style && dT.opts.style!=='custom') ? dT.opts.style : origStyle;
+    customSegs = segs;
+    setChip($('#fStyle'),'custom');
+    syncDialog();
+    toast('Suggested '+segs.length+' sections from the audio — drag boundaries or click blocks to fine-tune.');
+  }catch(e){
+    toast("Couldn't analyze this track's audio.");
+  }finally{
+    btn.disabled = false; btn.textContent = 'Auto-detect from audio ▸';
+  }
+};
+dlg.addEventListener('close', teardownFMedia);
+
 function openDialog(t){
   dT = t; dTapTimes = [];
   customSegs = (t.opts.style==='custom' && Array.isArray(t.opts.customSegs) && t.opts.customSegs.length)
@@ -2390,6 +2555,7 @@ function openDialog(t){
   $('#fBpm').value = t.bpm; $('#fDur').value = fmt(t.dur);
   $('#fOff').value = Math.round((t.plan && t.plan.off) || t.offset || 0);
   syncDialog(); dlg.showModal();
+  setupFMedia(t);
 }
 ['fBpm','fDur','fOff'].forEach(id=>{
   $('#'+id).addEventListener('input',()=>{ if(dT) syncDialog(); });
