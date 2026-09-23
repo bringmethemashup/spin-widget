@@ -249,11 +249,11 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .plfilm i::after{content:"";position:absolute;inset:0;background:linear-gradient(0deg,rgba(0,0,0,.75),transparent 55%)}
 .plfilm .more{flex:none;width:72px;height:58px;border-radius:9px;background:var(--panel2);border:1px solid var(--card-border);color:var(--muted);font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;text-align:center}
 
-#ride{position:fixed;inset:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,26vw,480px);background:#000;--zone:var(--z0);--zone-next:var(--z0)}
+#ride{position:fixed;inset:0;display:grid;grid-template-columns:minmax(0,1fr) clamp(320px,26vw,480px);grid-template-rows:minmax(0,1fr) auto;background:#000;--zone:var(--z0);--zone-next:var(--z0)}
 #rideExit{position:absolute;top:14px;right:14px;z-index:20;width:40px;height:40px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:1px solid rgba(255,255,255,.3);font-size:24px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);transition:background .15s,transform .15s}
 #rideExit:hover{background:rgba(0,0,0,.8);transform:scale(1.06)}
 #ride::after{content:"";position:absolute;inset:0;border:6px solid var(--zone);pointer-events:none;transition:border-color .25s}
-#stage{position:relative;background:#000;min-width:0}
+#stage{position:relative;background:#000;min-width:0;grid-column:1;grid-row:1}
 #stage iframe,#stage #yt{position:absolute;inset:0;width:100%;height:100%;border:0}
 /* ---- mashup screensaver: exact port of Bring Me The Mashup's Zune-HD-style
    idle screen — a crossfading montage of the mashup's own artists (real
@@ -282,7 +282,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .tabs .btn{padding:7px 14px;font-size:14px;border:0;background:transparent;color:var(--muted);border-radius:8px;font-weight:600}
 .tabs .btn.primary{background:var(--panel2);color:var(--text);box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
 .tabs .btn:hover{color:var(--text)}
-#panel{display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:linear-gradient(180deg,#171d29,#12161f);border-left:1px solid var(--line);min-height:0;overflow:hidden;text-align:center}
+#panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:linear-gradient(180deg,#171d29,#12161f);border-left:1px solid var(--line);min-height:0;overflow:hidden;text-align:center}
 .np .nt{font-weight:700;font-size:clamp(15px,2.3vh,24px);line-height:1.2;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-align:center}
 .np .nm{display:flex;justify-content:center;gap:16px;color:var(--muted);font-size:clamp(12px,1.7vh,16px);margin-top:3px;font-variant-numeric:tabular-nums}
 .zonecard{border-radius:16px;padding:clamp(8px,1.5vh,18px) 16px;background:var(--z0);color:#10141b;transition:background-color .2s,color .2s,box-shadow .3s;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 10px 40px -10px var(--zone);text-align:center}
@@ -305,7 +305,12 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
    segment across every song) so the instructor can see the shape of the intensity to come —
    not just a plain percent-done fill. A translucent "glass" scrim grows over the part
    already ridden, so done vs. still-to-come reads at a glance without losing the shape. */
-#classProgress{position:absolute;left:0;right:0;bottom:0;height:clamp(28px,4.2vh,40px);background:rgba(255,255,255,.06);z-index:17;pointer-events:none;overflow:hidden;box-shadow:0 -1px 0 rgba(255,255,255,.08) inset;display:flex;align-items:center;justify-content:center}
+/* Was an absolute overlay pinned to the bottom of #ride, which covered the bottom of the
+   video/panel content underneath it — Ian, 2026-09-22: "the bottom bar is now covering the
+   bottom and looks messy, adjust so the bottom bar is below everything". It's now its own
+   grid row (see #ride's grid-template-rows), spanning both columns beneath the video+panel
+   row, so it genuinely sits below everything instead of overlapping it. */
+#classProgress{position:relative;grid-column:1/-1;grid-row:2;height:clamp(26px,3.8vh,36px);background:rgba(255,255,255,.06);z-index:17;pointer-events:none;overflow:hidden;box-shadow:0 -1px 0 rgba(255,255,255,.08) inset;display:flex;align-items:center;justify-content:center}
 #classProgressBar{position:absolute;inset:0}
 #classProgressBar i{position:absolute;top:0;bottom:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 4px rgba(0,0,0,.25)}
 #classProgressDone{position:absolute;top:0;bottom:0;left:0;width:0%;background:rgba(6,9,14,.6);backdrop-filter:blur(1px);box-shadow:1px 0 0 rgba(255,255,255,.25);transition:width .3s linear}
@@ -340,8 +345,12 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
    it for text contrast — combined, that read as basically black instead of a rainbow.
    This version puts the moving gradient directly on the card (crisp, not blurred) and
    uses a much lighter scrim, just enough to keep the zone name legible. */
-.zonecard.spectrum{background:linear-gradient(120deg,#2f7dff,#2fd07a,#ffd21f,#ff3b3b,#ff7ad9,#2f7dff);background-size:300% 300%;color:#fff;position:relative;overflow:hidden;isolation:isolate;box-shadow:0 0 0 1px rgba(255,255,255,.12) inset,0 14px 60px -12px #ff3b3b;animation:specbgmove 6s linear infinite}
+.zonecard.spectrum{background:linear-gradient(120deg,#2f7dff,#2fd07a,#ffd21f,#ff3b3b,#ff7ad9,#2f7dff);background-size:300% 300%;color:#fff;position:relative;overflow:hidden;isolation:isolate;box-shadow:0 0 0 1px rgba(255,255,255,.12) inset,0 14px 60px -12px #ff3b3b;animation:specbgmove 6s linear infinite,specglowpulse 1.8s ease-in-out infinite}
 @keyframes specbgmove{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+/* "constant glow, like max XP in a game, waiting to be used" — Ian's phrase for the race
+   card. A slow breathing glow on top of the moving gradient, so it reads as charged/ready
+   rather than just a colorful card. */
+@keyframes specglowpulse{0%,100%{box-shadow:0 0 0 1px rgba(255,255,255,.12) inset,0 14px 60px -12px #ff3b3b}50%{box-shadow:0 0 0 2px rgba(255,255,255,.3) inset,0 18px 90px -8px #ff3b3b}}
 .zonecard.spectrum::after{content:"";position:absolute;inset:0;z-index:1;background:rgba(6,9,14,.32)}
 .zonecard.spectrum .zonename,.zonecard.spectrum .zonelabel{position:relative;z-index:2;text-shadow:0 2px 18px rgba(0,0,0,.85)}
 /* ---- glowing countdown light over the stage for the last 10 seconds ---- */
@@ -352,6 +361,8 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #cdLight span{font-family:var(--disp);font-weight:900;font-size:clamp(84px,12vw,190px);line-height:1;color:#fff;
   font-variant-numeric:tabular-nums;text-shadow:0 0 26px var(--zone-next),0 0 78px var(--zone-next),0 4px 12px rgba(0,0,0,.8)}
 #cdLight.tick span{animation:cdtick .42s var(--ease)}
+/* the 30s "Get ready" pre-race window shows a word, not a giant digit — same spot, smaller type */
+#cdLight.cdtext #cdNum{font-size:clamp(30px,5.6vw,64px);letter-spacing:.01em}
 #cdCue{position:absolute;top:100%;left:50%;transform:translateX(-50%);margin-top:-.4em;white-space:nowrap;
   font-style:normal;font-weight:800;font-size:clamp(20px,2.6vw,42px);color:#fff;
   text-shadow:0 0 22px var(--zone-next),0 3px 10px rgba(0,0,0,.85)}
@@ -778,23 +789,13 @@ function tClimb(N,g){
   if(rec) steps.push(stp(Math.max(0,zs[0]-1 >= 0 ? zs[0]-1 : 0),rec,'Recover','Let it drop'));
   return steps;
 }
-function tRace(N,us,g,D){
-  // A real race is a short, all-out effort — about 3 minutes — not the whole song at max
-  // spectrum. The first stretch is a plain white block (not the spectrum) so riders aren't
-  // thrown straight into "race" cold — 30s for a typical song, or 60s once the song is long
-  // enough to afford a longer build (reusing the same 4-minute threshold the time-trial offset
-  // already uses, via ttOffset), then the race itself is capped around 3 minutes, and anything
-  // left over after that eases back down rather than holding the effort forever.
-  const prepSec = ttOffset(D||0);
-  const prepU = Math.max(1, Math.round(prepSec/us));
-  const raceU = Math.max(1, Math.round(180/us));
-  if(N <= prepU+1) return [stp(3,N,'Race','Race to the finish',true)];
-  let left = N - prepU;
-  const raceLen = Math.min(raceU,left); left -= raceLen;
-  const steps = [stp(0,prepU,'Get ready','Build into the race')];
-  steps.push(stp(3,raceLen,'Race','Race to the finish',true));
-  if(left>0) steps.push(stp(0,left,'Recover','Ease off after the race'));
-  return steps;
+function tRace(N){
+  // Ian, 2026-09-22 (post-class notes): a race should read as one solid color, no sections
+  // or phrases — no separate prep block, no recovery tail. The whole song is one continuous
+  // race segment start to finish. The "get ready" lead-in is handled separately in the ride
+  // view (a big countdown callout in the last 30s before a race begins, see setCountdown),
+  // not as a distinct colored block here.
+  return [stp(3,N,'Race','Race to the finish',true)];
 }
 function tRecover(N){
   const zs = N>=3 ? [2,1,0] : [1];
@@ -830,7 +831,7 @@ function buildPlan(t,o){
     case 'timetrial': steps = tTimetrial(N,g,o,D); break;
     case 'pyramid':   steps = tPyramid(N,g); break;
     case 'climb':     steps = tClimb(N,g); break;
-    case 'race':      steps = tRace(N,us,g,D); break;
+    case 'race':      steps = tRace(N); break;
     case 'recover':   steps = tRecover(N); break;
     default:          steps = tInterval(N,g,o,us);
   }
@@ -1690,7 +1691,7 @@ function trackHTML(t,i){
   // show the interval split, since the auto-planner now varies it song to song
   const iv = t.plan.style==='interval' && t.opts.workSec
     ? `<span title="Work / recover, in seconds">${t.opts.workSec}s on &middot; ${t.opts.restSec}s off</span>` : '';
-  const tip = t.bpmSrc==='guess' ? 'Estimated from genre. Check it.' : (t.bpmSrc==='title' ? 'Found in the title' : 'Set by you');
+  const tip = t.bpmSrc==='guess' ? 'From genre — tap to correct' : (t.bpmSrc==='title' ? 'Found in the title' : 'Set by you');
   return `<li class="track" data-uid="${t.uid}" data-level="${e.level}">
     <span class="tnum" aria-hidden="true">${i+1}</span>
     <img class="thumb" src="${esc(t.thumb)}" alt="" loading="lazy">
@@ -2337,13 +2338,25 @@ function setSpectrum(on){
   $('#spectrumFrame').hidden = !on;
   $('#zoneCard').classList.toggle('spectrum',on);
 }
-// The glowing warning light over the video for the last seconds of a step.
+// The glowing warning light over the video for the last seconds of a step. Normally only
+// the last 10s (a big digit). Ahead of a race specifically it opens up to a 30s window —
+// riders should see "Get ready" well before the effort actually starts, not just a 10-count.
 function setCountdown(secs,cue){
   const el = $('#cdLight');
-  if(secs == null){ if(cdLast!==null){ el.hidden = true; cdLast = null; } return; }
-  const n = clamp(Math.ceil(secs-0.001),1,10);
+  if(secs == null){ if(cdLast!==null){ el.hidden = true; cdLast = null; el.classList.remove('cdtext'); } return; }
   if(el.hidden) el.hidden = false;
   setText('cdCue', cue || '');
+  if(secs>10){
+    el.classList.add('cdtext');
+    const label = 'ready'+Math.ceil(secs-0.001);
+    if(cdLast !== label){
+      cdLast = label; setText('cdNum','Get ready');
+      el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+    }
+    return;
+  }
+  el.classList.remove('cdtext');
+  const n = clamp(Math.ceil(secs-0.001),1,10);
   if(cdLast !== n){
     cdLast = n; setText('cdNum',String(n));
     el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
@@ -2430,7 +2443,7 @@ async function goToCurrent(){
   setText('npTitle',t.title); setText('npIdx','Song '+(cur+1)+' of '+tracks().length);
   // Cadence reads roughly half the song's BPM once it's fast enough that riding it 1:1
   // would be an absurd spin — so anything over 120 shows the halved number instead.
-  setText('bpmV',String(t.bpm>120 ? Math.round(t.bpm/2) : t.bpm));
+  setText('bpmV',String(t.bpm>=112 ? Math.round(t.bpm/2) : t.bpm));
   $('#pulse').style.setProperty('--beat',(60/t.bpm).toFixed(3)+'s');
   setText('wType', workoutTypeText(t));
 
@@ -2548,11 +2561,15 @@ function frame(){
       $('#ride').style.setProperty('--zone-next',nz.color);
       callout.querySelector('.sw').style.background = nz.color;
       setText('calloutText','Next: '+nname+' in '+fmtDown(remain));
-      const isHot = changing && remain<=10;
-      callout.classList.toggle('hot',isHot);
+      // A race gets a longer heads-up window (30s) than a normal color change (10s), and
+      // the countdown names the actual color to switch to (e.g. "BLUE"), not a level number —
+      // Ian's own words: "after 1, it should also say the color you should change to".
+      const hotWindow = next.race ? 30 : 10;
+      const isHot = changing && remain<=hotWindow;
+      callout.classList.toggle('hot', isHot && remain<=10);
       callout.classList.remove('long');
-      $('#ride').classList.toggle('edgehot',isHot);
-      setCountdown(isHot ? remain : null, levelText(next.z,next.race));
+      $('#ride').classList.toggle('edgehot', isHot && remain<=10);
+      setCountdown(isHot ? remain : null, next.race ? 'RACE' : nz.name.toUpperCase());
     } else {
       callout.classList.remove('hot');
       callout.classList.add('long');
@@ -2582,7 +2599,8 @@ function frame(){
     $('#ride').style.setProperty('--zone-next',fz.color);
     callout.querySelector('.sw').style.background = fz.color; callout.classList.remove('hot','long');
     $('#ride').classList.remove('edgehot');
-    setCountdown(-p<=10 ? -p : null);
+    const preWindow = first.race ? 30 : 10;
+    setCountdown(-p<=preWindow ? -p : null, first.race ? 'RACE' : fz.name.toUpperCase());
     setText('calloutText','Next: '+(first.race?'Race':fz.name)+' in '+fmtDown(-p));
     hwInner.style.transform = 'translateY('+(nowY-(plan.D-p)*pps)+'px)';
   }
