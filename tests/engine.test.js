@@ -389,23 +389,18 @@ check('a short red stretch is left alone (nothing to cap)', () => {
   const p = buildPlan(song({dur:60,bpm:120}), {style:'timetrial', goal:'high', ttZone:4});
   ok(!p.segs.some(s=>s.effect), 'a short time trial should not trigger ring of fire / tunnel');
 });
-check('a race has a white prep block sized by song length, then one spectrum segment capped near 3 minutes', () => {
-  // A real race is a short, all-out effort (~3 min), not the whole song at spectrum. The
-  // first block is plain white (zone 0), not a race spectrum, so riders aren't thrown into
-  // "race" cold — 30s for a typical song, 60s once the song is over 4 minutes (same threshold
-  // ttOffset already uses for the time-trial lead-in) — and anything left over after the
-  // capped race eases back down instead of holding forever.
+check('a race is one solid spectrum segment, no prep block or recovery tail', () => {
+  // Ian, 2026-09-22 (post-class notes): "a race is just one solid color, no sections or
+  // phrases" — this supersedes the earlier white-prep-block-then-capped-race design. The
+  // "get ready" lead-in now lives entirely in the ride view's countdown callout (a 30s window
+  // before a race, instead of the usual 10s), not as a colored block in the plan itself.
   for(const dur of [120, 210, 300, 420]){
     const p = buildPlan(song({dur, bpm:150}), {style:'race', goal:'high'});
-    const prep = p.segs[0];
-    ok(!prep.race, 'the first block should be a plain prep, not the race spectrum');
-    eq(prep.z, 0, dur+'s song: the prep block should be white (zone 0), got zone '+prep.z);
-    const prepLen = prep.end - prep.start, expected = dur > 240 ? 60 : 30;
-    ok(Math.abs(prepLen-expected) <= 20, dur+'s song: expected a prep near '+expected+'s, got '+Math.round(prepLen)+'s');
-    const raceSegs = p.segs.filter(s=>s.race);
-    eq(raceSegs.length, 1, 'exactly one race segment');
-    const raceLen = raceSegs[0].end - raceSegs[0].start;
-    ok(raceLen <= 185, 'the race segment should be capped near 3 minutes, got '+Math.round(raceLen)+'s');
+    eq(p.segs.length, 1, dur+'s song: a race plan should be exactly one segment, got '+p.segs.length);
+    const seg = p.segs[0];
+    ok(seg.race, 'the single segment should be flagged as the race spectrum');
+    eq(seg.z, 3, 'race rides zone 3, got zone '+seg.z);
+    ok(Math.abs((seg.end-seg.start) - p.D) < 0.01, 'the race segment should span the entire plan duration');
   }
 });
 check('interval cues are left to the instructor — no prescriptive voice lines', () => {
