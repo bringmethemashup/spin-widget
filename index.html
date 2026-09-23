@@ -353,6 +353,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #songProgress{position:relative;flex:none;height:10px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.06);box-shadow:0 1px 0 rgba(255,255,255,.08) inset}
 #songProgressBar{position:absolute;inset:0}
 #songProgressBar i{position:absolute;top:0;bottom:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -1px 2px rgba(0,0,0,.25)}
+#songProgressOffMark{position:absolute;top:0;bottom:0;width:2px;background:rgba(255,255,255,.85);z-index:3;box-shadow:0 0 3px 1px rgba(0,0,0,.5);transform:translateX(-1px)}
 #songProgressDone{position:absolute;top:0;bottom:0;left:0;width:0%;background:rgba(6,9,14,.6);backdrop-filter:blur(1px);box-shadow:1px 0 0 rgba(255,255,255,.25);transition:width .3s linear}
 .zonecard.flash{animation:flash .45s ease-in-out 3}
 @keyframes flash{50%{filter:brightness(1.55) saturate(1.2);transform:scale(1.025)}}
@@ -503,7 +504,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
         <button class="btn" id="btnSuggest">Suggest songs</button>
         <label class="lenbox" title="How long the class needs to run. Build the arc tells you if you're short."><input id="classLen" type="number" min="10" max="120" step="5" value="45" aria-label="Class length in minutes"> min class</label>
         <button class="btn" id="btnQuickClass">Quick build class</button>
-        <button class="btn" id="btnRank">Sort by difficulty</button>
+        <button class="btn" id="btnRank">Sort: easiest first</button>
         <button class="btn primary spectrum" id="btnStart">Start class</button>
       </div>
       <ol id="tracks"></ol>
@@ -597,6 +598,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     <div id="callout"><span class="sw"></span><span id="calloutText"></span></div>
     <div id="songProgress" title="This song, start to finish — dimmed part is done">
       <div id="songProgressBar"></div>
+      <i id="songProgressOffMark" hidden title="Where this song's real plan starts, after the lead-in"></i>
       <div id="songProgressDone"></div>
     </div>
     <div class="stats">
@@ -2084,10 +2086,19 @@ $('#btnQuickClass').onclick = ()=>{
   toast(pinned ? 'Class rebuilt — '+pinned+(pinned===1?' custom song':' custom songs')+' reset to automatic.'
                : 'Class rebuilt: warm-up, build, peak, cool down.');
 };
+// Ian's feedback: "sort by difficulty" didn't say what it actually did, or which way it had
+// just sorted. The button label now always names the sort that clicking it will produce next
+// (so it reads as an instruction, not a mystery toggle), and the toast confirms what happened.
 let rankAsc = true;
+function updateRankBtn(){
+  const btn = $('#btnRank'); if(!btn) return;
+  btn.textContent = rankAsc ? 'Sort: easiest first' : 'Sort: hardest first';
+  btn.title = 'Sorts the playlist by workout difficulty (' + (rankAsc?'lightest to hardest':'hardest to lightest') + ')';
+}
+updateRankBtn();
 $('#btnRank').onclick = ()=>{
   tracks().sort((a,b)=>(effort(a.plan.segs).score-effort(b.plan.segs).score)*(rankAsc?1:-1));
-  toast(rankAsc?'Sorted easy to hard.':'Sorted hard to easy.'); rankAsc = !rankAsc; save(); renderTracks();
+  toast(rankAsc?'Sorted easiest to hardest.':'Sorted hardest to easiest.'); rankAsc = !rankAsc; updateRankBtn(); save(); renderTracks();
 };
 
 // ---------- custom dialog ----------
@@ -2500,6 +2511,16 @@ function buildSongProgressBar(t){
     plan.segs.forEach(s=>{ html += block(plan.off+s.start, s.end-s.start, s.z, !!s.race); });
   }
   wrap.innerHTML = html;
+  // A distinct marker at the lead-in's end, so "where the real plan starts" reads as a plain
+  // fact on the bar itself, not just an implied color change (Ian's ask, item 18 — originally
+  // about Time Trial's own offset, now relevant to every style since the lead-in is universal).
+  const markEl = $('#songProgressOffMark');
+  if(markEl){
+    if(plan && plan.off>0){
+      markEl.style.left = clamp(plan.off/total*100,0,100)+'%';
+      markEl.hidden = false;
+    } else markEl.hidden = true;
+  }
 }
 async function goToCurrent(){
   const t = tracks()[cur]; if(!t) return;
