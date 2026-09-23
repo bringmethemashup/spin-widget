@@ -2457,16 +2457,19 @@ function layoutHighway(){
   const D = t.plan.D, off = t.plan.off||0;
   // A time trial's white intro (the lead-in before the plan starts) is real ride time,
   // and the "now" line already passes through it — so the rolling bar needs to include it
-  // too, not just the strip in the Creator. Same left(t)=(D-t)*pps coordinate space as the
-  // segments below, just extended backward past 0 to -off.
+  // too, not just the strip in the Creator. Coordinates here are elapsed-time-since-the-
+  // start-of-the-lead-in (left(t) = (off+t)*pps), so the bar reads left→right in the same
+  // direction time actually moves — earlier things on the left, later things on the right.
+  // (Ian caught an initial version of this flip that used the old vertical bar's top(t)=(D-t)*pps
+  // math unchanged, which put early segments on the right and read as running backwards.)
   hwInner.style.width = ((D+off)*pps)+'px';
   let html = '';
   if(off>0){
-    const w = off*pps - 2, left = D*pps + 1;
+    const w = off*pps - 2, left = 1;
     html += `<div class="hwseg lead" style="left:${left}px;width:${Math.max(2,w)}px;background:${ZONES[0].color};color:${ZONES[0].ink}">${w>=42?`<span>Intro</span><span>${fmt(off)}</span>`:''}</div>`;
   }
   html += t.plan.segs.map((s,i)=>{
-    const w = (s.end-s.start)*pps - 2, left = (D-s.end)*pps + 1, z = ZONES[s.z];
+    const w = (s.end-s.start)*pps - 2, left = (off+s.start)*pps + 1, z = ZONES[s.z];
     return `<div class="hwseg ${s.race?'spec':''}" data-i="${i}" style="left:${left}px;width:${Math.max(2,w)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${w>=42?`<span>${levelText(s.z,s.race)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
   }).join('');
   hwInner.innerHTML = html;
@@ -2770,7 +2773,7 @@ function frame(){
       // (no nt) should sound like an ending.
       setText('calloutText', nt ? 'Finishing this song. Next: '+nt.title : 'Last step of the class');
     }
-    const x0 = nowX - (plan.D-p)*pps; hwInner.style.transform = 'translateX('+x0+'px)';
+    const x0 = nowX - (plan.off+p)*pps; hwInner.style.transform = 'translateX('+x0+'px)';
   } else {
     // before the plan starts — this lead-in is a real White zone, ridden easy, not a
     // neutral "get ready" screen. Matches the white lead-in already shown in the build
@@ -2790,7 +2793,7 @@ function frame(){
     const preWindow = first.race ? 30 : 10;
     setCountdown(-p<=preWindow ? -p : null, first.race ? 'RACE' : fz.name.toUpperCase());
     setText('calloutText','Next: '+(first.race?'Race':fz.name)+' in '+fmtDown(-p));
-    hwInner.style.transform = 'translateX('+(nowX-(plan.D-p)*pps)+'px)';
+    hwInner.style.transform = 'translateX('+(nowX-(plan.off+p)*pps)+'px)';
     const tsub2 = $('#timerSub'), tsubBar2 = $('#timerSubBar');
     if(tsub2 && tsubBar2){
       tsub2.hidden = false;
