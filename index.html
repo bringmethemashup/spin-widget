@@ -721,7 +721,7 @@ const GOALS = {
   balanced:  {label:'Balanced',       peak:3, base:1, work:45, rest:30},
   high:      {label:'High intensity', peak:4, base:1, work:30, rest:45}
 };
-const STYLES = {interval:'Intervals', timetrial:'Time trial', race:'Race', pyramid:'Pyramid', climb:'Climb', recover:'Cool down', custom:'Custom'};
+const STYLES = {interval:'Intervals', timetrial:'Time trial', race:'Race', pyramid:'Pyramid', climb:'Climb', warmup:'Warm up', recover:'Cool down', custom:'Custom'};
 const GENRES = ['Pop','Hip-hop','R&B','Rock','House / EDM','Techno','Latin','Country','Disco / Throwback','Mashup / Remix','Other'];
 const GENRE_BPM = {'Pop':112,'Hip-hop':96,'R&B':92,'Rock':125,'House / EDM':126,'Techno':132,'Latin':100,'Country':106,'Disco / Throwback':118,'Mashup / Remix':122,'Other':118};
 const KEYWORDS = [
@@ -868,6 +868,17 @@ function tRace(N){
   // not as a distinct colored block here.
   return [stp(3,N,'Race','Race to the finish',true)];
 }
+// Ian, item 15: a real "warm up" construct, distinct from just an easy opener planned with
+// the cooldown goal — white ramping into blue, the typical shape of the first song of class.
+// Unlike tRecover (ease down FROM effort, ends at white), this builds UP from white, ending
+// in blue so the class has actually started moving by the time the song ends.
+function tWarmup(N){
+  if(N<3) return [stp(0,N,'Warm up','Ease into it')];
+  // Most of the song stays white — this is the easy opener, not a build — with just enough
+  // blue at the end that the class has genuinely started moving by the time it's over.
+  const whiteU = Math.max(2, Math.round(N*0.65)), blueU = Math.max(1, N-whiteU);
+  return [stp(0,whiteU,'Warm up','Ease into it'), stp(1,blueU,'Warm up','Settle into it')];
+}
 function tRecover(N){
   const zs = N>=3 ? [2,1,0] : [1];
   const us = distribute(N,zs.length,zs.map((_,i)=>i));
@@ -903,6 +914,7 @@ function buildPlan(t,o){
     case 'pyramid':   steps = tPyramid(N,g); break;
     case 'climb':     steps = tClimb(N,g); break;
     case 'race':      steps = tRace(N); break;
+    case 'warmup':    steps = tWarmup(N); break;
     case 'recover':   steps = tRecover(N); break;
     default:          steps = tInterval(N,g,o,us);
   }
@@ -1578,7 +1590,12 @@ function autoPlanClass(list,force){
     // position alone would have picked.
     if(lastStyle==='race') goal = 'cooldown';
     const late = n<4 || i >= Math.floor(n*0.5);
-    let o = quickPick(t,goal,0);
+    let o;
+    // Ian, item 15: the class opener gets a real warm-up shape (white ramping into blue),
+    // not just the cooldown goal's "ease down" recovery shape — those read the same to a
+    // rider but mean opposite things (winding down vs. just getting started).
+    if(i===0 && n>1) o = {style:'warmup', goal:'cooldown'};
+    else o = quickPick(t,goal,0);
     // don't let the class repeat itself: skip a style used in either of the last two songs.
     // The substitute still has to suit the song — a race needs cadence to be a race, and a
     // five-minute time trial is a slog rather than a workout.
