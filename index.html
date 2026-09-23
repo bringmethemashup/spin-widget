@@ -172,21 +172,18 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .strip i{display:block;min-width:2px;filter:saturate(1.08)}
 .strip i.segclick{cursor:pointer;transition:filter .1s,outline-color .1s}
 .strip i.segclick:hover{filter:saturate(1.08) brightness(1.18);outline:2px solid rgba(255,255,255,.65);outline-offset:-2px}
-/* Item 27: the fine-tune timing dialog — a draggable, video-synced version of the strip above */
-dialog.tunedlg{width:min(760px,96vw)}
-#tuneMediaWrap{border-radius:14px;overflow:hidden;background:#000;margin-bottom:14px}
-#tuneFrame{display:block;width:100%;aspect-ratio:16/9;border:0}
-#tuneAudio{display:block;width:100%}
-#tuneMediaNote{margin:10px 12px;color:var(--muted)}
-#tuneStrip{position:relative;height:64px;border-radius:10px;overflow:visible;background:#0c1017;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
-.tuneblock{position:absolute;top:0;bottom:0;cursor:pointer;filter:saturate(1.08);transition:filter .1s;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px}
-.tuneblock:hover{filter:saturate(1.08) brightness(1.15)}
-.tuneblock span{font-size:11px;font-weight:700;color:rgba(0,0,0,.55);text-shadow:0 1px 0 rgba(255,255,255,.2);pointer-events:none;white-space:nowrap}
-.tunehandle{position:absolute;top:-6px;bottom:-6px;width:14px;margin-left:-7px;cursor:ew-resize;z-index:2;display:flex;align-items:center;justify-content:center}
-.tunehandle::before{content:"";position:absolute;top:6px;bottom:6px;left:6px;width:2px;background:rgba(255,255,255,.55);border-radius:2px;box-shadow:0 0 4px rgba(0,0,0,.6)}
-.tunehandle:hover::before,.tunehandle.dragging::before{background:#fff;width:3px;left:5.5px}
-.tunehandlerm{position:absolute;top:-22px;left:50%;transform:translateX(-50%);width:18px;height:18px;border-radius:50%;background:#e5484d;color:#fff;border:0;font-size:12px;font-weight:800;line-height:18px;text-align:center;padding:0;display:none;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.5)}
-.tunehandle:hover .tunehandlerm{display:block}
+/* Item 27 (redone per Ian): no separate dialog — the bar itself, right in Remix it, is the
+   whole editor. Drag a boundary to retime, click a block to cycle its color, double-click to
+   split, hover a boundary for a × to remove it. */
+#fStrip{position:relative;height:56px;margin:14px 0 8px;border-radius:10px;overflow:visible;background:#0c1017;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.fsblock{position:absolute;top:0;bottom:0;cursor:pointer;filter:saturate(1.08);transition:filter .1s;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;border-radius:2px}
+.fsblock:hover{filter:saturate(1.08) brightness(1.15)}
+.fsblock span{font-size:11px;font-weight:700;color:rgba(0,0,0,.55);text-shadow:0 1px 0 rgba(255,255,255,.2);pointer-events:none;white-space:nowrap}
+.fshandle{position:absolute;top:-6px;bottom:-6px;width:14px;margin-left:-7px;cursor:ew-resize;z-index:2;display:flex;align-items:center;justify-content:center}
+.fshandle::before{content:"";position:absolute;top:6px;bottom:6px;left:6px;width:2px;background:rgba(255,255,255,.55);border-radius:2px;box-shadow:0 0 4px rgba(0,0,0,.6)}
+.fshandle:hover::before,.fshandle.dragging::before{background:#fff;width:3px;left:5.5px}
+.fshandlerm{position:absolute;top:-22px;left:50%;transform:translateX(-50%);width:18px;height:18px;border-radius:50%;background:#e5484d;color:#fff;border:0;font-size:12px;font-weight:800;line-height:18px;text-align:center;padding:0;display:none;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.fshandle:hover .fshandlerm{display:block}
 /* race steps read as a moving full spectrum, not one flat zone colour */
 .strip i.spec,.hwseg.spec{background:linear-gradient(90deg,#2f7dff,#2fd07a,#ffd21f,#ff3b3b,#ff7ad9,#2f7dff)!important;background-size:260% 100%!important;animation:specslide 5s linear infinite}
 @keyframes specslide{to{background-position:260% 0}}
@@ -217,11 +214,6 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #fInfo{color:var(--muted);font-size:14px;min-height:1.4em;margin-bottom:14px}
 .grid2 .span2{grid-column:1/-1}
 @media(max-width:520px){.grid2 .span2{grid-column:auto}}
-#fCustomSegs{display:flex;flex-direction:column;gap:8px;margin:8px 0}
-.segrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:8px 10px}
-.segrow .chip.segz{padding:5px 10px;font-size:12.5px}
-.segdurwrap{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;font-weight:600;margin-left:auto}
-.segdurwrap input{width:64px;background:#0f141c;border:1px solid var(--line);border-radius:8px;padding:6px 8px;color:var(--text);font:inherit;text-align:right}
 .flab{font-size:14px;color:var(--muted)}
 /* toggles instead of dropdowns — no popup menus anywhere in the dialog */
 .chips{display:flex;flex-wrap:wrap;gap:6px}
@@ -674,25 +666,6 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
   </div>
 </dialog>
 
-<!-- ============ FINE-TUNE TIMING DIALOG (item 27) ============ -->
-<dialog id="tuneDlg" class="tunedlg">
-  <div class="dlgbody">
-    <h3>Fine-tune timing</h3>
-    <p class="wrnote" style="margin:-8px 0 12px">Drag a boundary to retime it, click a block to change its color, double-click a block to split it. The bar always spans the whole song.</p>
-    <div id="tuneMediaWrap">
-      <iframe id="tuneFrame" hidden src="" title="Song preview" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
-      <audio id="tuneAudio" hidden controls></audio>
-      <p id="tuneMediaNote" class="wrnote" hidden></p>
-    </div>
-    <div id="tuneStrip"></div>
-    <div id="tuneInfo" class="wrnote" style="margin:8px 0"></div>
-    <div class="row end">
-      <button class="btn" id="tuneCancel" type="button">Cancel</button>
-      <button class="btn primary" id="tuneSave" type="button">Save timing</button>
-    </div>
-  </div>
-</dialog>
-
 <!-- ============ CUSTOM DIALOG ============ -->
 <dialog id="dlg">
   <div class="dlgbody">
@@ -714,27 +687,19 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
         <div class="row"><input id="fBpm" type="number" min="60" max="200"><button class="btn" id="fTap" type="button">Tap</button></div>
       </label>
       <label>Song length<input id="fDur" type="text" placeholder="3:45"></label>
-      <label class="span2"><span class="flab">Genre</span><div id="fGenre" class="chips" role="group" aria-label="Genre"></div></label>
       <label class="span2">Start plan at (seconds)<input id="fOff" type="number" min="0" max="240"><span class="wrnote" id="offNote"></span></label>
-      <div id="lCustomSegs" class="span2" hidden>
-        <span class="flab">Set the color bar yourself — no goal, no automatic timing</span>
-        <div id="fCustomSegs"></div>
-        <button type="button" class="btn" id="fAddSeg">+ Add block</button>
-      </div>
     </div>
+    <!-- Ian, item 27 (redone): no separate "fine-tune" dialog and no separate typed-block-list
+         editor — just one bar, directly editable, for every style. Drag a boundary to retime it,
+         click a block to cycle its color (same gesture the strip already had), double-click to
+         split a block, hover a boundary for a × to remove it. The first edit on any non-Custom
+         style freezes that style's current shape into customSegs and switches Style to Custom
+         behind the scenes — reusing the existing buildCustomPlan() escape hatch — so "Reset to
+         automatic" can always get back to what the picked style would generate on its own. -->
     <div class="strip big" id="fStrip"></div>
     <div class="row" style="justify-content:space-between;align-items:center;margin:-6px 0 8px">
-      <span class="wrnote" id="fStripHint" hidden>Click any block above to change just its color — everything else about this song's plan stays automatic.</span>
-      <button type="button" class="mini" id="fResetColors" hidden>Reset colors</button>
-    </div>
-    <!-- Ian's new item 27: whatever style you picked above, "Fine-tune timing" opens the actual
-         video/audio next to a draggable version of that same bar, so you can retime it against
-         where the song's own drop/chorus/best-part actually lands, block-by-block, for any style
-         — not just Custom. Saving converts the result into a Custom-style plan (customSegs), the
-         same escape-hatch data shape the app already had, so no new engine plan-building code
-         was needed for this — only a better way to build that data. -->
-    <div class="row" style="margin:-4px 0 10px">
-      <button type="button" class="btn" id="fTune">Fine-tune timing against the video ▸</button>
+      <span class="wrnote" id="fStripHint">Click a block to change its color. Drag a boundary to retime it. Double-click a block to split it. Hover a boundary for a × to remove it.</span>
+      <button type="button" class="mini" id="fResetCustom" hidden>Reset to automatic</button>
     </div>
     <div id="fInfo"></div>
     <div class="row end">
@@ -775,7 +740,6 @@ const GOALS = {
   high:      {label:'High intensity', peak:4, base:1, work:30, rest:45}
 };
 const STYLES = {interval:'Intervals', timetrial:'Time trial', race:'Race', pyramid:'Pyramid', climb:'Climb', warmup:'Warm up', recover:'Cool down', custom:'Custom'};
-const GENRES = ['Pop','Hip-hop','R&B','Rock','House / EDM','Techno','Latin','Country','Disco / Throwback','Mashup / Remix','Other'];
 const GENRE_BPM = {'Pop':112,'Hip-hop':96,'R&B':92,'Rock':125,'House / EDM':126,'Techno':132,'Latin':100,'Country':106,'Disco / Throwback':118,'Mashup / Remix':122,'Other':118};
 const KEYWORDS = [
   [/mashup|bootleg|remix|\bedit\b/i,'Mashup / Remix'],
@@ -1868,8 +1832,7 @@ function trackHTML(t,i){
     </div>
     <div class="tacts">
       <button class="btn" data-act="quick" title="Quickly re-roll this song's automatic plan">One-tap plan</button>
-      <button class="mini" data-act="edit" title="Open this song's plan, including per-block color editing">Edit</button>
-      <button class="btn" data-act="custom" title="Take full manual control of this song's blocks">Remix it</button>
+      <button class="btn" data-act="custom" title="Open this song's plan — drag the bar to customize its color and timing">Remix it</button>
       ${t.manual?'<button class="mini" data-act="auto" title="Hand this song back to the automatic class plan">Back to auto</button>':''}
       <div class="grp"><button class="tgrip" type="button" aria-label="Reorder ${esc(t.title)}, position ${i+1} of ${tracks().length}. Drag, or press the up and down arrow keys." title="Drag to reorder — or focus it and press ↑ / ↓">⠿</button><button class="mini" data-act="del" aria-label="Remove">Remove</button></div>
     </div>
@@ -1902,23 +1865,11 @@ $('#tracks').addEventListener('click',e=>{
   // (t.manual) and the automatic class planner stops touching it.
   if(act==='quick'){ t.qb = (t.qb||0)+1; t.opts = quickPick(t,t.opts.goal||'balanced',t.qb>1?1:0); t.manual = true; rebuild(t); }
   else if(act==='auto'){ t.manual = false; autoPlanClass(ts); toast('Back on the automatic plan.'); }
-  // "Edit" opens the same dialog as "Custom" but leaves the style chip alone, so a
-  // standard automatic style (Cool down, Intervals, etc.) opens on itself — this is
-  // the only way in to the per-block color override, since forcing Custom (as the
-  // "Custom" button intentionally does) would throw the automatic timing away.
-  else if(act==='edit'){ openDialog(t); return; }
-  // The "Custom" quick-action on the card means "take me straight to the manual
-  // color-bar editor" — openDialog() alone reopens whatever style the song already
-  // has, so without forcing the style chip here, a song that wasn't already Custom
-  // (the common case) opened on its current automatic style with no color editor in
-  // sight, which read as "the colors can't be changed."
-  else if(act==='custom'){
-    openDialog(t);
-    setChip($('#fStyle'),'custom');
-    if(!customSegs.length) seedCustomSegs();
-    syncDialog();
-    return;
-  }
+  // Item 27 (redone per Ian): one button, not two — "Remix it" just opens the dialog on
+  // whatever style the song already has. The bar inside is directly editable for every
+  // style now, so there's no separate "force straight into Custom" entry point needed
+  // any more; dragging/clicking the bar is what gets you into a custom-timed plan.
+  else if(act==='custom'){ openDialog(t); return; }
   else if(act==='half'){ t.bpm = clamp(Math.round(t.bpm/2),60,200); t.bpmSrc='manual'; rebuild(t); }
   else if(act==='double'){ t.bpm = clamp(Math.round(t.bpm*2),60,200); t.bpmSrc='manual'; rebuild(t); }
   else if(act==='del'){ ts.splice(i,1); autoPlanClass(ts); }
@@ -2251,51 +2202,30 @@ function setChip(el,v){
   });
 }
 const onChip = ()=>{ if(dT) syncDialog(); };
-// The Custom style hands the whole bar to the instructor — no goal, no engine timing. Each
-// row is one block: a zone and a length in seconds, edited directly and previewed live in
-// the same strip the automatic styles use.
+// Item 27 (redone per Ian): the Custom style's data shape ({z,dur} blocks, no goal, no engine
+// timing — the app's existing manual-override escape hatch) is still what gets built here, but
+// there's now exactly one way to build it: drag/click/double-click/remove directly on the bar
+// itself. No separate typed-row editor, no separate dialog. Editing any non-Custom style's bar
+// freezes its current shape into customSegs and switches Style to Custom behind the scenes.
 let customSegs = [];
-// A single block recolored by hand on an otherwise-automatic style (Cool down, Intervals, ...)
-// — {segIndex: zoneIndex}. Cleared whenever Style or Goal changes, since either can reshape
-// the block layout enough that old indices would land on the wrong block.
-let colorOverrides = {};
-function renderCustomSegs(){
-  $('#fCustomSegs').innerHTML = customSegs.map((cs,i)=>`
-    <div class="segrow" data-i="${i}">
-      <div class="chips">${ZONES.map((z,zi)=>`<button type="button" class="chip segz${zi===cs.z?' on':''}" data-z="${zi}"><i class="dot" style="background:${z.color}"></i>${z.name}</button>`).join('')}</div>
-      <span class="segdurwrap"><input type="number" class="segdur" min="5" max="600" step="5" value="${cs.dur}" aria-label="Block length, in seconds"> s</span>
-      <button type="button" class="btn seg-rm"${customSegs.length<=1?' disabled':''}>Remove</button>
-    </div>`).join('');
+function fsTotalSec(){ return customSegs.reduce((a,s)=>a+s.dur,0) || 1; }
+// Whatever style the song had when the Remix it dialog was opened — "Reset to automatic" goes
+// back to this, discarding customSegs, rather than to some arbitrary default.
+let origStyle = 'auto';
+function seedCustomSegsFromCurrentPlan(){
+  const {temp,o} = dialogState();
+  const plan = buildPlan(temp,{...o,style:o.style==='custom'?origStyle:o.style});
+  customSegs = [];
+  if(plan.off>0) customSegs.push({z:0,dur:plan.off});
+  plan.segs.forEach(s=>customSegs.push({z:s.z,dur:Math.max(1,s.end-s.start)}));
+  if(!customSegs.length) customSegs.push({z:0,dur:temp.dur||210});
 }
-function seedCustomSegs(){
-  const segs = (dT.plan && dT.plan.segs && dT.plan.segs.length) ? dT.plan.segs : [{z:0,start:0,end:60}];
-  customSegs = segs.map(s=>({z:s.z, dur:Math.max(5,Math.round(s.end-s.start))}));
-  renderCustomSegs();
-}
-$('#fCustomSegs').addEventListener('click',e=>{
-  const zb = e.target.closest('.segz');
-  if(zb){ const i = +zb.closest('.segrow').dataset.i; customSegs[i].z = +zb.dataset.z; renderCustomSegs(); syncDialog(); return; }
-  const rm = e.target.closest('.seg-rm');
-  if(rm && customSegs.length>1){ const i = +rm.closest('.segrow').dataset.i; customSegs.splice(i,1); renderCustomSegs(); syncDialog(); }
-});
-$('#fCustomSegs').addEventListener('input',e=>{
-  const inp = e.target.closest('.segdur'); if(!inp) return;
-  const i = +inp.closest('.segrow').dataset.i;
-  customSegs[i].dur = clamp(+inp.value||10,5,600);
-  syncDialog();
-});
-$('#fAddSeg').onclick = ()=>{
-  customSegs.push({z:customSegs.length?customSegs[customSegs.length-1].z:0, dur:30});
-  renderCustomSegs(); syncDialog();
-};
 chipGroup($('#fStyle'),[['auto','Quick pick'],...Object.entries(STYLES)],v=>{
-  if(v==='custom' && !customSegs.length) seedCustomSegs();
-  colorOverrides = {};
+  if(v!=='custom') customSegs = []; // a non-custom style picked from the chips overrides any hand edit
   onChip();
 });
-chipGroup($('#fGoal'),Object.entries(GOALS).map(([k,v])=>[k,v.label]),()=>{ wrTouched = false; colorOverrides = {}; onChip(); });
+chipGroup($('#fGoal'),Object.entries(GOALS).map(([k,v])=>[k,v.label]),()=>{ wrTouched = false; onChip(); });
 chipGroup($('#fTT'),[['','Automatic'],...ZONES.map((z,i)=>[String(i),z.name,z.color])],onChip);
-chipGroup($('#fGenre'),GENRES.map(g=>[g,g]),onChip);
 
 // ===== interval work/rest sliders =====
 let wrTouched = false;
@@ -2311,165 +2241,133 @@ function syncWR(){
 }
 function dialogState(){
   const style = $('#fStyle').value, goal = $('#fGoal').value;
-  const temp = {...dT, bpm:clamp(+$('#fBpm').value||dT.bpm,60,200), genre:$('#fGenre').value, offset: dT.offsetManual ? clamp(+$('#fOff').value||0,0,240) : 0, offsetManual:!!dT.offsetManual, dur:parseDur($('#fDur').value)||dT.dur};
+  const temp = {...dT, bpm:clamp(+$('#fBpm').value||dT.bpm,60,200), offset: dT.offsetManual ? clamp(+$('#fOff').value||0,0,240) : 0, offsetManual:!!dT.offsetManual, dur:parseDur($('#fDur').value)||dT.dur};
   let o = {style,goal,ttZone:$('#fTT').value,workSec:$('#fWork').value,restSec:$('#fRest').value};
   if(style==='auto') o = {...o,...quickPick(temp,goal,0)};
   if(style==='custom') o.customSegs = customSegs;
-  else if(Object.keys(colorOverrides).length) o.colorOverrides = {...colorOverrides};
   return {temp,o};
+}
+// Renders #fStrip as the one editable bar — every style, not just Custom. When the style is
+// already Custom this draws straight from customSegs; for any other style it draws the plan
+// that style/goal combo would generate, ready to be edited (which is what triggers the freeze
+// into customSegs — see fsEnsureCustom below).
+function renderFStrip(){
+  const {temp,o} = dialogState();
+  let blocks;
+  if(o.style==='custom'){
+    blocks = customSegs;
+  } else {
+    const plan = buildPlan(temp,o);
+    blocks = [];
+    if(plan.off>0) blocks.push({z:0,dur:plan.off});
+    plan.segs.forEach(s=>blocks.push({z:s.z,dur:Math.max(1,s.end-s.start)}));
+  }
+  const total = blocks.reduce((a,s)=>a+s.dur,0) || 1, strip = $('#fStrip');
+  let acc = 0, html = '';
+  blocks.forEach((s,i)=>{
+    const leftPct = acc/total*100, widthPct = s.dur/total*100;
+    acc += s.dur;
+    html += `<div class="fsblock" data-idx="${i}" style="left:${leftPct}%;width:${widthPct}%;background:${ZONES[s.z].color}" title="${ZONES[s.z].name} — ${fmt(s.dur)}. Click to change color, double-click to split.">${widthPct>=6?`<span>${fmt(s.dur)}</span>`:''}</div>`;
+  });
+  acc = 0;
+  for(let i=0;i<blocks.length-1;i++){
+    acc += blocks[i].dur;
+    html += `<div class="fshandle" data-idx="${i}" style="left:${acc/total*100}%"><button type="button" class="fshandlerm" data-rm="${i}" title="Remove this boundary — merges the two blocks">&times;</button></div>`;
+  }
+  strip.innerHTML = html;
+}
+// The first drag/click/split/merge on a non-Custom style's bar freezes its current shape into
+// customSegs and switches Style to Custom — after that, further edits work straight on
+// customSegs. Returns the blocks array to mutate (always customSegs, after this call).
+function fsEnsureCustom(){
+  const {o} = dialogState();
+  if(o.style!=='custom'){
+    origStyle = o.style;
+    seedCustomSegsFromCurrentPlan();
+    setChip($('#fStyle'),'custom');
+  }
+  return customSegs;
 }
 function syncDialog(){
   const {temp,o} = dialogState();
   $('#lGoal').hidden = o.style==='recover' || o.style==='custom';
   $('#lTT').hidden = o.style!=='timetrial';
   $('#lWork').hidden = o.style!=='interval';
-  $('#lCustomSegs').hidden = o.style!=='custom';
-  if(o.style==='custom') renderCustomSegs();
   if(!wrTouched && o.style==='interval'){ const g = wrDefaults(); $('#fWork').value = g.work; $('#fRest').value = g.rest; }
   syncWR();
+  renderFStrip();
+  $('#fResetCustom').hidden = o.style!=='custom';
   const plan = buildPlan(temp,o);
-  const canRecolor = o.style!=='custom';
-  $('#fStrip').innerHTML = stripHTML(plan.segs,plan.D,plan.off,canRecolor);
-  $('#fStripHint').hidden = !canRecolor;
-  $('#fResetColors').hidden = !Object.keys(colorOverrides).length;
   const e = effort(plan.segs);
   if(!dT.offsetManual) $('#fOff').value = Math.round(plan.off);
   $('#offNote').textContent = dT.offsetManual ? 'Set by you.' : (plan.off>0 ? 'Chosen automatically for a time trial.' : 'Automatic.');
   let info = STYLES[plan.style]+', effort '+e.level+' of 5.';
-  if(o.style==='custom') info = 'Custom, effort '+e.level+' of 5 — '+fmt(plan.D)+' total, set block by block above.';
+  if(o.style==='custom') info = 'Customized, effort '+e.level+' of 5 — '+fmt(plan.D)+' total.';
   else {
     if(plan.off>0) info += ' Starts at '+fmt(plan.off)+(plan.style==='timetrial' && !temp.offsetManual ? ' so the intro plays first.' : '.');
     info += ' Steps snap to '+Math.round(unitSec(temp.bpm))+'-second phrases so changes land on the music.';
-    if(Object.keys(colorOverrides).length) info += ' '+Object.keys(colorOverrides).length+' block'+(Object.keys(colorOverrides).length>1?'s':'')+' recolored by hand.';
   }
   $('#fInfo').textContent = info;
 }
 $('#fStrip').addEventListener('click',e=>{
   if(!dT) return;
-  const b = e.target.closest('[data-idx]'); if(!b) return;
-  const idx = +b.dataset.idx;
-  const {temp,o} = dialogState();
-  if(o.style==='custom') return;
-  const seg = buildPlan(temp,o).segs[idx]; if(!seg) return;
-  colorOverrides[idx] = (seg.z+1)%ZONES.length;
-  syncDialog();
-});
-$('#fResetColors').onclick = ()=>{ colorOverrides = {}; syncDialog(); };
-
-// ===== item 27: fine-tune timing against the video/audio =====
-// Local editing state for the tune dialog — a list of {z,dur} blocks, same shape as
-// customSegs, but built here with a video-synced drag UI instead of typed-in duration rows.
-// Seeded from whatever plan the Remix it dialog is currently showing (any style), so this
-// works the same way regardless of which style the song started from.
-let tuneSegs = [];
-function tuneTotalSec(){ return tuneSegs.reduce((a,s)=>a+s.dur,0) || 1; }
-function openTune(){
-  if(!dT) return;
-  const {temp,o} = dialogState();
-  const plan = buildPlan(temp,o);
-  tuneSegs = [];
-  if(plan.off>0) tuneSegs.push({z:0,dur:plan.off});
-  plan.segs.forEach(s=>tuneSegs.push({z:s.z,dur:Math.max(1,s.end-s.start)}));
-  if(!tuneSegs.length) tuneSegs.push({z:0,dur:temp.dur||210});
-  const frame = $('#tuneFrame'), audio = $('#tuneAudio'), note = $('#tuneMediaNote');
-  frame.hidden = true; frame.src = ''; audio.hidden = true; audio.pause(); audio.src = ''; note.hidden = true;
-  if(temp.kind==='youtube' && temp.id){
-    frame.src = 'https://www.youtube.com/embed/'+encodeURIComponent(temp.id)+'?rel=0&playsinline=1';
-    frame.hidden = false;
-  } else if(temp.kind==='mashup' && temp.audioLink){
-    note.hidden = false; note.textContent = 'Loading audio…';
-    resolvePcloudUrl(temp.audioLink,false).then(url=>{
-      if(!$('#tuneDlg').open) return; // dialog was closed before the URL resolved
-      audio.src = url||''; audio.hidden = !url; note.hidden = !!url;
-      if(!url) note.textContent = 'Couldn’t load audio for preview — you can still drag the bar below.';
-    }).catch(()=>{ if($('#tuneDlg').open) note.textContent = 'Couldn’t load audio for preview — you can still drag the bar below.'; });
-  } else {
-    note.hidden = false; note.textContent = 'No preview available for this song — you can still drag the bar below.';
-  }
-  renderTuneStrip();
-  $('#tuneDlg').showModal();
-}
-function closeTune(){
-  $('#tuneFrame').src = ''; $('#tuneFrame').hidden = true;
-  const a = $('#tuneAudio'); a.pause(); a.src = ''; a.hidden = true;
-  $('#tuneDlg').close();
-}
-function renderTuneStrip(){
-  const total = tuneTotalSec(), strip = $('#tuneStrip');
-  let acc = 0, html = '';
-  tuneSegs.forEach((s,i)=>{
-    const leftPct = acc/total*100, widthPct = s.dur/total*100;
-    acc += s.dur;
-    html += `<div class="tuneblock" data-idx="${i}" style="left:${leftPct}%;width:${widthPct}%;background:${ZONES[s.z].color}" title="${ZONES[s.z].name} — ${fmt(s.dur)}. Click to change color, double-click to split.">${widthPct>=6?`<span>${fmt(s.dur)}</span>`:''}</div>`;
-  });
-  acc = 0;
-  for(let i=0;i<tuneSegs.length-1;i++){
-    acc += tuneSegs[i].dur;
-    const leftPct = acc/total*100;
-    html += `<div class="tunehandle" data-idx="${i}" style="left:${leftPct}%"><button type="button" class="tunehandlerm" data-rm="${i}" title="Remove this boundary — merges the two blocks">&times;</button></div>`;
-  }
-  strip.innerHTML = html;
-  $('#tuneInfo').textContent = tuneSegs.length+' block'+(tuneSegs.length>1?'s':'')+', '+fmt(total)+' total — matches the song length.';
-}
-$('#tuneStrip').addEventListener('click',e=>{
   if(e.target.closest('[data-rm]')){
-    const i = +e.target.closest('[data-rm]').dataset.rm;
-    if(tuneSegs.length>1){ tuneSegs[i].dur += tuneSegs[i+1].dur; tuneSegs.splice(i+1,1); renderTuneStrip(); }
+    const segs = fsEnsureCustom(), i = +e.target.closest('[data-rm]').dataset.rm;
+    if(segs.length>1){ segs[i].dur += segs[i+1].dur; segs.splice(i+1,1); syncDialog(); }
     return;
   }
-  const b = e.target.closest('.tuneblock'); if(!b || b.dataset.dragged==='1') return;
-  const i = +b.dataset.idx;
-  tuneSegs[i].z = (tuneSegs[i].z+1)%ZONES.length;
-  renderTuneStrip();
+  const b = e.target.closest('.fsblock'); if(!b || b.dataset.dragged==='1') return;
+  const idx = +b.dataset.idx, segs = fsEnsureCustom();
+  segs[idx].z = (segs[idx].z+1)%ZONES.length;
+  syncDialog();
 });
-$('#tuneStrip').addEventListener('dblclick',e=>{
-  const b = e.target.closest('.tuneblock'); if(!b) return;
-  const i = +b.dataset.idx, s = tuneSegs[i];
+$('#fStrip').addEventListener('dblclick',e=>{
+  if(!dT) return;
+  const b = e.target.closest('.fsblock'); if(!b) return;
+  const segs = fsEnsureCustom(), idx = +b.dataset.idx, s = segs[idx];
   if(s.dur < 10) return; // need at least two 5s halves
   const half = Math.round(s.dur/2);
-  tuneSegs.splice(i,1,{z:s.z,dur:half},{z:s.z,dur:s.dur-half});
-  renderTuneStrip();
+  segs.splice(idx,1,{z:s.z,dur:half},{z:s.z,dur:s.dur-half});
+  syncDialog();
 });
 // Dragging a boundary handle resizes the two blocks on either side of it — the bar's total
 // length never changes, since it's always meant to span the whole song.
-let tuneDrag = null;
-$('#tuneStrip').addEventListener('pointerdown',e=>{
-  const h = e.target.closest('.tunehandle'); if(!h || e.target.closest('[data-rm]')) return;
-  const i = +h.dataset.idx, total = tuneTotalSec(), rect = $('#tuneStrip').getBoundingClientRect();
-  tuneDrag = {i, startX:e.clientX, d0:tuneSegs[i].dur, d1:tuneSegs[i+1].dur, pxPerSec: rect.width/total};
-  h.setPointerCapture(e.pointerId); h.classList.add('dragging');
+let fsDrag = null;
+$('#fStrip').addEventListener('pointerdown',e=>{
+  if(!dT) return;
+  const h = e.target.closest('.fshandle'); if(!h || e.target.closest('[data-rm]')) return;
+  const segs = fsEnsureCustom(), i = +h.dataset.idx, total = fsTotalSec(), rect = $('#fStrip').getBoundingClientRect();
+  fsDrag = {i, startX:e.clientX, d0:segs[i].dur, d1:segs[i+1].dur, pxPerSec: rect.width/total};
+  renderFStrip(); // re-render so the handle grabbed still exists after fsEnsureCustom may have just switched styles
+  const h2 = $('#fStrip').querySelector(`.fshandle[data-idx="${i}"]`);
+  if(h2){ h2.setPointerCapture(e.pointerId); h2.classList.add('dragging'); }
 });
-$('#tuneStrip').addEventListener('pointermove',e=>{
-  if(!tuneDrag) return;
-  const {i,startX,d0,d1,pxPerSec} = tuneDrag;
+$('#fStrip').addEventListener('pointermove',e=>{
+  if(!fsDrag) return;
+  const {i,startX,d0,d1,pxPerSec} = fsDrag;
   const dSec = (e.clientX-startX)/Math.max(1,pxPerSec);
   let nd0 = clamp(d0+dSec,5,d0+d1-5);
-  tuneSegs[i].dur = nd0; tuneSegs[i+1].dur = d0+d1-nd0;
-  const total = tuneTotalSec();
-  let acc = 0;
-  for(let k=0;k<=i;k++) acc += tuneSegs[k].dur;
-  const strip = $('#tuneStrip');
-  const b0 = strip.querySelector(`.tuneblock[data-idx="${i}"]`), b1 = strip.querySelector(`.tuneblock[data-idx="${i+1}"]`);
-  const h = strip.querySelector(`.tunehandle[data-idx="${i}"]`);
-  let accBefore = 0; for(let k=0;k<i;k++) accBefore += tuneSegs[k].dur;
-  if(b0){ b0.style.left=(accBefore/total*100)+'%'; b0.style.width=(tuneSegs[i].dur/total*100)+'%'; b0.dataset.dragged='1'; }
-  if(b1){ b1.style.left=(acc/total*100)+'%'; b1.style.width=(tuneSegs[i+1].dur/total*100)+'%'; b1.dataset.dragged='1'; }
+  customSegs[i].dur = nd0; customSegs[i+1].dur = d0+d1-nd0;
+  const total = fsTotalSec();
+  let acc = 0; for(let k=0;k<=i;k++) acc += customSegs[k].dur;
+  let accBefore = 0; for(let k=0;k<i;k++) accBefore += customSegs[k].dur;
+  const strip = $('#fStrip');
+  const b0 = strip.querySelector(`.fsblock[data-idx="${i}"]`), b1 = strip.querySelector(`.fsblock[data-idx="${i+1}"]`);
+  const h = strip.querySelector(`.fshandle[data-idx="${i}"]`);
+  if(b0){ b0.style.left=(accBefore/total*100)+'%'; b0.style.width=(customSegs[i].dur/total*100)+'%'; b0.dataset.dragged='1'; }
+  if(b1){ b1.style.left=(acc/total*100)+'%'; b1.style.width=(customSegs[i+1].dur/total*100)+'%'; b1.dataset.dragged='1'; }
   if(h) h.style.left=(acc/total*100)+'%';
 });
-function tuneDragEnd(){
-  if(!tuneDrag) return;
-  tuneDrag = null;
-  renderTuneStrip(); // full re-render: normalizes widths and clears the dragged-block guard
+function fsDragEnd(){
+  if(!fsDrag) return;
+  fsDrag = null;
+  syncDialog(); // full re-render: normalizes widths, updates the info line, clears the dragged-block guard
 }
-$('#tuneStrip').addEventListener('pointerup',tuneDragEnd);
-$('#tuneStrip').addEventListener('pointercancel',tuneDragEnd);
-$('#fTune').onclick = openTune;
-$('#tuneCancel').onclick = closeTune;
-$('#tuneDlg').addEventListener('cancel', closeTune); // Esc key
-$('#tuneSave').onclick = ()=>{
-  customSegs = tuneSegs.map(s=>({z:s.z,dur:Math.max(5,Math.round(s.dur))}));
-  setChip($('#fStyle'),'custom');
-  closeTune();
+$('#fStrip').addEventListener('pointerup',fsDragEnd);
+$('#fStrip').addEventListener('pointercancel',fsDragEnd);
+$('#fResetCustom').onclick = ()=>{
+  setChip($('#fStyle'),origStyle==='custom'?'auto':origStyle);
+  customSegs = [];
   syncDialog();
 };
 
@@ -2477,12 +2375,14 @@ function openDialog(t){
   dT = t; dTapTimes = [];
   customSegs = (t.opts.style==='custom' && Array.isArray(t.opts.customSegs) && t.opts.customSegs.length)
     ? t.opts.customSegs.map(s=>({...s})) : [];
-  colorOverrides = (t.opts.style!=='custom' && t.opts.colorOverrides) ? {...t.opts.colorOverrides} : {};
+  // "Reset to automatic" goes back to whatever style the song actually had when this song was
+  // last built with a real style (not Custom) — falls back to Quick pick if it was already
+  // Custom when the dialog opened, since there's no other style to remember in that case.
+  origStyle = (t.opts.style && t.opts.style!=='custom') ? t.opts.style : 'auto';
   $('#dlgTitle').textContent = t.title;
   setChip($('#fGoal'), t.opts.goal||'balanced');
   setChip($('#fTT'), t.opts.ttZone==null?'':String(t.opts.ttZone));
   setChip($('#fStyle'), t.opts.style || 'auto');
-  setChip($('#fGenre'), t.genre);
   const g = GOALS[t.opts.goal]||GOALS.balanced;
   wrTouched = !!(t.opts.workSec || t.opts.restSec);
   $('#fWork').value = clamp(+t.opts.workSec || g.work,10,180);
@@ -2514,7 +2414,7 @@ $('#fApply').onclick = ()=>{
   const {temp,o} = dialogState();
   if(+$('#fBpm').value !== dT.bpm) dT.bpmSrc = 'manual';
   if(!wrTouched){ delete o.workSec; delete o.restSec; }
-  dT.bpm = temp.bpm; dT.genre = temp.genre; dT.offset = temp.offset; dT.dur = temp.dur; dT.durKnown = true;
+  dT.bpm = temp.bpm; dT.offset = temp.offset; dT.dur = temp.dur; dT.durKnown = true;
   dT.opts = o; dT.manual = true; rebuild(dT); dlg.close(); dT = null; save(); renderTracks();
 };
 
