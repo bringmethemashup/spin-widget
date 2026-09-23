@@ -301,8 +301,8 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .zonecard{border-radius:16px;padding:clamp(8px,1.5vh,18px) 16px;background:var(--z0);color:#10141b;transition:background-color .2s,color .2s,box-shadow .3s;box-shadow:0 0 0 1px rgba(255,255,255,.08) inset,0 10px 40px -10px var(--zone);text-align:center}
 .zonename{font-family:var(--disp);font-weight:900;font-size:clamp(50px,11vh,140px);line-height:.88;letter-spacing:.01em;text-transform:uppercase;text-shadow:0 2px 0 rgba(255,255,255,.15);white-space:nowrap;display:block}
 .zonelabel{font-weight:700;font-size:clamp(15px,2.5vh,28px);margin-top:.35em;line-height:1.15}
-.wtype{font-weight:800;font-size:clamp(16px,2.4vh,23px);color:#c9e6ff;margin-top:4px;letter-spacing:.01em;background:rgba(159,208,255,.14);border:1px solid rgba(159,208,255,.3);border-radius:999px;padding:5px 16px;display:inline-block}
-.wtype:empty{display:none}
+.wtype{font-weight:800;font-size:clamp(18px,3vh,28px);color:#c9e6ff;letter-spacing:.02em;text-transform:uppercase;background:rgba(159,208,255,.14);border:1px solid rgba(159,208,255,.35);border-radius:14px;padding:8px 16px;display:block;text-align:center;box-shadow:0 0 0 1px rgba(255,255,255,.04) inset}
+.wtype:empty{display:none;padding:0;border:0}
 /* ---- peak-red effects: capped bursts on top of a long red segment, not the whole thing ---- */
 .zonecard.fire,.zonecard.tunnel{position:relative;overflow:hidden;isolation:isolate}
 /* Ian, 2026-09-22: "an actual fire border ... instead of this thing you can make on
@@ -425,18 +425,23 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .stat .v{font-family:var(--disp);font-weight:800;font-size:clamp(28px,5.4vh,64px);line-height:1;font-variant-numeric:tabular-nums}
 .pulse{position:absolute;right:12px;top:12px;width:14px;height:14px;border-radius:50%;background:var(--zone);animation:beat var(--beat,.5s) ease-out infinite}
 @keyframes beat{0%{transform:scale(1.5);opacity:1}100%{transform:scale(.7);opacity:.45}}
-#hw{position:relative;flex:1;min-height:240px;border-radius:14px;background:#0c1017;overflow:hidden;border:1px solid var(--line);box-shadow:inset 0 0 24px rgba(0,0,0,.5)}
-#hw::before{content:"";position:absolute;left:0;right:0;top:0;height:22%;background:linear-gradient(#0c1017,rgba(12,16,23,0));z-index:2;pointer-events:none}
-#hwInner{position:absolute;left:0;right:0;top:0;will-change:transform}
-.hwseg{position:absolute;left:10px;right:10px;border-radius:6px;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:0 12px;overflow:hidden;font-weight:700;font-size:clamp(12px,1.9vh,20px);white-space:nowrap}
+/* Ian, item 10: flips the "rolling highway" of upcoming colors from a vertical scroll (an
+   earlier session's redesign) back to horizontal — closer to the reference image's own
+   horizontal color-block bar. Segments now lay out left→right along the time axis and the
+   whole strip translates on X instead of Y; the NOW marker sits closer to the bar's middle
+   (see nowX below) instead of pinned near the bottom. */
+#hw{position:relative;flex:none;height:clamp(110px,16vh,170px);border-radius:14px;background:#0c1017;overflow:hidden;border:1px solid var(--line);box-shadow:inset 0 0 24px rgba(0,0,0,.5)}
+#hw::before{content:"";position:absolute;top:0;bottom:0;left:0;width:16%;background:linear-gradient(90deg,#0c1017,rgba(12,16,23,0));z-index:2;pointer-events:none}
+#hwInner{position:absolute;top:0;bottom:0;left:0;will-change:transform}
+.hwseg{position:absolute;top:8px;bottom:8px;border-radius:6px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:6px 12px;overflow:hidden;font-weight:700;font-size:clamp(11px,1.7vh,17px);white-space:nowrap}
 .hwseg.past{opacity:.28}
 .hwseg.spec span{text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 12px rgba(0,0,0,.7)}
 .hwseg span:last-child{font-variant-numeric:tabular-nums;opacity:.8;font-weight:500}
 /* A solid opaque band (not just a thin border) with a dark halo on both sides, so it reads as
    a clear "you are here" marker against any zone color underneath it — including white/light
    segments, where a plain glowing white line used to disappear entirely. */
-#nowLine{position:absolute;left:0;right:0;height:5px;margin-top:-2px;background:#fff;box-shadow:0 -3px 6px -1px rgba(0,0,0,.65),0 3px 6px -1px rgba(0,0,0,.65),0 0 16px 2px rgba(255,255,255,.85);z-index:3}
-#nowLine span{position:absolute;right:8px;top:9px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.7);border-radius:4px;padding:1px 6px;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
+#nowLine{position:absolute;top:0;bottom:0;width:5px;margin-left:-2px;background:#fff;box-shadow:-3px 0 6px -1px rgba(0,0,0,.65),3px 0 6px -1px rgba(0,0,0,.65),0 0 16px 2px rgba(255,255,255,.85);z-index:3}
+#nowLine span{position:absolute;top:8px;left:9px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.7);border-radius:4px;padding:1px 6px;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
 .controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
 .controls .btn{padding:7px 10px;font-size:clamp(12px,1.7vh,15px)}
 @media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
@@ -597,8 +602,13 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     <div class="np">
       <div class="nt" id="npTitle"></div>
       <div class="nm"><span id="npIdx"></span><span id="npClass"></span></div>
-      <div class="wtype" id="wType"></div>
     </div>
+    <!-- Ian, items 5/6: the workout-type label was easy to miss in the first ~30s of a song.
+         DECIDED: no new data, just make the three things that were already here (workout type,
+         current target zone, upcoming-color shape) bigger and better organized — so this badge
+         moved out of the small song-meta row and became its own full-width, bigger banner right
+         above the current-zone card, where it reads at a glance instead of blending into the title. -->
+    <div class="wtype" id="wType"></div>
     <div class="zonecard" id="zoneCard">
       <div class="zonename" id="zoneName">Ready</div>
       <div class="zonelabel" id="zoneLabel">Press play</div>
@@ -2422,7 +2432,7 @@ let player = null, ytOK = false, cur = -1, anchor = {t:0,at:0}, lastIdx = -2, ra
 // skipped songs are all reflected honestly rather than assumed from the plan.
 let zoneTime = {}, statsLastAt = null, statsShown = false, zoneKeyShown = undefined;
 const hw = $('#hw'), hwInner = $('#hwInner');
-let pps = 4, nowY = 200, cdLast = null, spectrumOn = false;
+let pps = 4, nowX = 200, cdLast = null, spectrumOn = false;
 const cache = {};
 function setText(id,val){ if(cache[id]!==val){ cache[id]=val; $('#'+id).textContent=val; } }
 // The zone name is centered and never wraps, but "Yellow" is noticeably wider than "Red"
@@ -2440,24 +2450,27 @@ function setZoneName(val){ const changed = cache.zoneName!==val; setText('zoneNa
 
 function layoutHighway(){
   const t = tracks()[cur]; if(!t) return;
-  const H = hw.clientHeight || 300; nowY = H*0.78; pps = nowY/store.look;
+  // Item 10: NOW sits closer to the middle of the bar (was 0.78 of the axis, pinned near
+  // one end) — riders get a bit of "just happened" context to the left as well as "coming up"
+  // to the right, instead of almost the whole bar being future.
+  const W = hw.clientWidth || 300; nowX = W*0.42; pps = nowX/store.look;
   const D = t.plan.D, off = t.plan.off||0;
   // A time trial's white intro (the lead-in before the plan starts) is real ride time,
   // and the "now" line already passes through it — so the rolling bar needs to include it
-  // too, not just the strip in the Creator. Same top(t)=(D-t)*pps coordinate space as the
+  // too, not just the strip in the Creator. Same left(t)=(D-t)*pps coordinate space as the
   // segments below, just extended backward past 0 to -off.
-  hwInner.style.height = ((D+off)*pps)+'px';
+  hwInner.style.width = ((D+off)*pps)+'px';
   let html = '';
   if(off>0){
-    const h = off*pps - 2, top = D*pps + 1;
-    html += `<div class="hwseg lead" style="top:${top}px;height:${Math.max(2,h)}px;background:${ZONES[0].color};color:${ZONES[0].ink}">${h>=26?`<span>Intro</span><span>${fmt(off)}</span>`:''}</div>`;
+    const w = off*pps - 2, left = D*pps + 1;
+    html += `<div class="hwseg lead" style="left:${left}px;width:${Math.max(2,w)}px;background:${ZONES[0].color};color:${ZONES[0].ink}">${w>=42?`<span>Intro</span><span>${fmt(off)}</span>`:''}</div>`;
   }
   html += t.plan.segs.map((s,i)=>{
-    const h = (s.end-s.start)*pps - 2, top = (D-s.end)*pps + 1, z = ZONES[s.z];
-    return `<div class="hwseg ${s.race?'spec':''}" data-i="${i}" style="top:${top}px;height:${Math.max(2,h)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${h>=26?`<span>${levelText(s.z,s.race)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
+    const w = (s.end-s.start)*pps - 2, left = (D-s.end)*pps + 1, z = ZONES[s.z];
+    return `<div class="hwseg ${s.race?'spec':''}" data-i="${i}" style="left:${left}px;width:${Math.max(2,w)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${w>=42?`<span>${levelText(s.z,s.race)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
   }).join('');
   hwInner.innerHTML = html;
-  $('#nowLine').style.top = nowY+'px';
+  $('#nowLine').style.left = nowX+'px';
   lastIdx = -2;
 }
 function setZoneVars(z){ const r = $('#ride'); r.style.setProperty('--zone',ZONES[z].color); }
@@ -2757,7 +2770,7 @@ function frame(){
       // (no nt) should sound like an ending.
       setText('calloutText', nt ? 'Finishing this song. Next: '+nt.title : 'Last step of the class');
     }
-    const y0 = nowY - (plan.D-p)*pps; hwInner.style.transform = 'translateY('+y0+'px)';
+    const x0 = nowX - (plan.D-p)*pps; hwInner.style.transform = 'translateX('+x0+'px)';
   } else {
     // before the plan starts — this lead-in is a real White zone, ridden easy, not a
     // neutral "get ready" screen. Matches the white lead-in already shown in the build
@@ -2777,7 +2790,7 @@ function frame(){
     const preWindow = first.race ? 30 : 10;
     setCountdown(-p<=preWindow ? -p : null, first.race ? 'RACE' : fz.name.toUpperCase());
     setText('calloutText','Next: '+(first.race?'Race':fz.name)+' in '+fmtDown(-p));
-    hwInner.style.transform = 'translateY('+(nowY-(plan.D-p)*pps)+'px)';
+    hwInner.style.transform = 'translateX('+(nowX-(plan.D-p)*pps)+'px)';
     const tsub2 = $('#timerSub'), tsubBar2 = $('#timerSubBar');
     if(tsub2 && tsubBar2){
       tsub2.hidden = false;
