@@ -190,6 +190,11 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 dialog{background:var(--card-grad);color:var(--text);border:1px solid var(--card-border);border-radius:18px;padding:0;width:min(640px,94vw);box-shadow:var(--shadow-md)}
 dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .dlgbody{padding:22px}
+#previewDlg{width:min(720px,94vw);background:#000}
+.previewbody{padding:0;position:relative}
+#previewClose{position:absolute;top:8px;right:8px;z-index:2;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0}
+#previewFrameWrap{position:relative;width:100%;aspect-ratio:16/9;background:#000}
+#previewFrame{position:absolute;inset:0;width:100%;height:100%;border:0}
 .dlgbody h3{font-family:var(--disp);font-weight:800;font-size:28px;margin:0 0 14px;line-height:1.1}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid2 label{display:flex;flex-direction:column;gap:5px;font-size:14px;color:var(--muted)}
@@ -515,7 +520,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
         <button class="btn primary spectrum" id="btnStart">Start class</button>
       </div>
       <ol id="tracks"></ol>
-      <div id="empty">Add songs from search or paste a link. The class plans itself as you go — easy opener, build, peak, cool down — and re-plans whenever you add, remove or reorder a song. Change any one song with Quick build or Custom and it stays exactly as you set it.</div>
+      <div id="empty">Add songs from search or paste a link. The class plans itself as you go — easy opener, build, peak, cool down — and re-plans whenever you add, remove or reorder a song. Change any one song with One-tap plan or Remix it and it stays exactly as you set it.</div>
       <div id="recs" hidden></div>
     </div>
   </div>
@@ -632,6 +637,17 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     </div>
   </aside>
 </section>
+
+<!-- ============ VIDEO PREVIEW MODAL ============ -->
+<!-- Ian's item 23: "before adding a song in search results" he wanted a real inline preview,
+     not just a click-through to YouTube in a new tab. A modal keeps him on the Creator page —
+     his DECIDED choice over an expand-in-place row. -->
+<dialog id="previewDlg">
+  <div class="dlgbody previewbody">
+    <button class="mini" id="previewClose" aria-label="Close preview" title="Close preview">&times;</button>
+    <div id="previewFrameWrap"><iframe id="previewFrame" src="" title="Video preview" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe></div>
+  </div>
+</dialog>
 
 <!-- ============ CUSTOM DIALOG ============ -->
 <dialog id="dlg">
@@ -1484,9 +1500,20 @@ function entryText(e){
   return [e.displayTitle, e.mashupArtist, (e.tags||[]).join(' '),
     (e.sourceSongs||[]).map(x=>x.artist+' '+x.title).join(' ')].filter(Boolean).join(' ');
 }
+// How many of your saved playlists a catalog song has actually appeared in — Ian's own
+// "past playlists" signal (item 22): recommend what you've actually used before, not just
+// a one-shot energy match against the library.
+function catalogUsageCounts(){
+  const counts = {};
+  (store.playlists||[]).forEach(pl=>{
+    (pl.tracks||[]).forEach(t=>{ if(t.catalogId) counts[t.catalogId] = (counts[t.catalogId]||0)+1; });
+  });
+  return counts;
+}
 function recommendSongs(catalog, ts, gapSec){
   const have = new Set(ts.map(t=>t.catalogId).filter(Boolean));
-  let pool = catalog.filter(e=>!have.has(e.id)).map(e=>({e, en:songEnergy(provisionalTrack(e)), th:themeScore(store.theme, entryText(e))}));
+  const usage = catalogUsageCounts();
+  let pool = catalog.filter(e=>!have.has(e.id)).map(e=>({e, en:songEnergy(provisionalTrack(e)), th:themeScore(store.theme, entryText(e)), uc:usage[e.id]||0}));
   if(!pool.length) return [];
   // With a theme set, prefer what matches it — but never hand back nothing, so fall
   // back to the whole library if the theme matches none of it.
@@ -1499,17 +1526,23 @@ function recommendSongs(catalog, ts, gapSec){
   const used = new Set(), out = [];
   const free = () => pool.filter(p=>!used.has(p.e.id));
   const take = (p,reason) => { if(p){ used.add(p.e.id); out.push({entry:p.e, reason}); } };
+  // A genuine favorite first — something you've actually ridden to before more than once,
+  // not just a fresh energy match. Only offered when it exists; never forced.
+  const favorite = free().filter(p=>p.uc>=2).sort((a,b)=>b.uc-a.uc)[0];
+  take(favorite, 'a favorite — you\'ve used this in '+favorite?.uc+' of your playlists');
   // For the peak, offer the genuinely hardest thing available — not merely a notch above
-  // what's already there, which is what a nearest-to-target search would return.
-  const hardest = free().sort((a,b)=>b.en-a.en)[0];
+  // what's already there, which is what a nearest-to-target search would return. Among
+  // near-ties on difficulty, prefer the one you've actually used before.
+  const hardest = free().sort((a,b)=>(b.en-a.en) || (b.uc-a.uc))[0];
   take(hardest, (hi!==null && hardest && hardest.en>hi)
     ? 'harder than anything in here — could take the peak'
     : 'your hardest option, for the peak');
-  // the body of the build
-  free().sort((a,b)=>Math.abs(a.en-mid)-Math.abs(b.en-mid)).slice(0, gapSec>30 ? 3 : 2)
+  // the body of the build — energy match first, but break close ties toward songs you've
+  // actually used before rather than an arbitrary catalog order.
+  free().sort((a,b)=>(Math.abs(a.en-mid)-Math.abs(b.en-mid)) || (b.uc-a.uc)).slice(0, gapSec>30 ? 3 : 2)
         .forEach(p=>take(p,'sits in the build'));
   // something to land on
-  const gentlest = free().sort((a,b)=>a.en-b.en)[0];
+  const gentlest = free().sort((a,b)=>(a.en-b.en) || (b.uc-a.uc))[0];
   take(gentlest, (lo!==null && gentlest && gentlest.en<lo)
     ? 'gentle enough to land the class'
     : 'the gentlest thing left, to land the class');
@@ -1641,7 +1674,7 @@ function renderMashupResults(list, headNote){
     const date = mashupDateStr(e);
     const vid = e.video && e.video.sourceId;
     const thumbSrc = vid ? ('https://i.ytimg.com/vi/'+vid+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
-    const watch = vid ? ` data-watch="${esc(vid)}" title="Click to preview on YouTube before adding" style="cursor:pointer"` : '';
+    const watch = vid ? ` data-watch="${esc(vid)}" title="Click to preview before adding" style="cursor:pointer"` : '';
     return `<div class="res"><img src="${esc(thumbSrc)}" alt=""${watch} loading="lazy"><div><div class="rt">${esc(e.displayTitle||label)}</div><div class="rc">${esc(label)}</div>${date?`<div class="rd">Uploaded ${esc(date)}</div>`:''}</div><button class="btn" data-addmash="${i}">Add</button></div>`;
   }).join('');
 }
@@ -1700,7 +1733,7 @@ async function doSearch(){
     lastResults = await apiVideos(ids);
     if(!store.keyOK){ store.keyOK = true; save(); }
     setupForced = false; syncSetupVis();
-    box.innerHTML = lastResults.map((v,i)=>`<div class="res"><img src="${esc(v.thumb)}" alt="" data-watch="${esc(v.id)}" title="Click to preview on YouTube before adding" style="cursor:pointer" loading="lazy"><div><div class="rt">${esc(v.title)}</div><div class="rc">${esc(v.channel)}, ${fmt(v.dur)}</div></div><button class="btn" data-add="${i}">Add</button></div>`).join('');
+    box.innerHTML = lastResults.map((v,i)=>`<div class="res"><img src="${esc(v.thumb)}" alt="" data-watch="${esc(v.id)}" title="Click to preview before adding" style="cursor:pointer" loading="lazy"><div><div class="rt">${esc(v.title)}</div><div class="rc">${esc(v.channel)}, ${fmt(v.dur)}</div></div><button class="btn" data-add="${i}">Add</button></div>`).join('');
   }catch(e){
     // A key that has stopped working should put its setup steps back on screen.
     if(/key|quota|forbidden|denied/i.test(e.message||'')){ store.keyOK = false; save(); setupForced = true; syncSetupVis(); $('#settings').open = true; }
@@ -1761,12 +1794,12 @@ function trackHTML(t,i){
         <button class="mini" data-act="half" title="Half tempo">&frac12;</button><button class="mini" data-act="double" title="Double tempo">&times;2</button>
       </div>
       <div class="strip">${stripHTML(t.plan.segs,t.plan.D,t.plan.off)}</div>
-      <div class="tplan"><b>${STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}${t.plan.off>0?`<span title="The plan starts after the intro">Starts ${fmt(t.plan.off)}</span>`:''}${iv}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.manual?'<span class="pin" title="You set this one by hand — the automatic class plan leaves it alone">Custom</span>':''}</div>
+      <div class="tplan"><b>${STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}${t.plan.off>0?`<span title="The plan starts after the intro">Starts ${fmt(t.plan.off)}</span>`:''}${iv}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.manual?'<span class="pin" title="You set this one by hand — the automatic class plan leaves it alone">Remixed</span>':''}</div>
     </div>
     <div class="tacts">
-      <button class="btn" data-act="quick">Quick build</button>
+      <button class="btn" data-act="quick" title="Quickly re-roll this song's automatic plan">One-tap plan</button>
       <button class="mini" data-act="edit" title="Open this song's plan, including per-block color editing">Edit</button>
-      <button class="btn" data-act="custom">Custom</button>
+      <button class="btn" data-act="custom" title="Take full manual control of this song's blocks">Remix it</button>
       ${t.manual?'<button class="mini" data-act="auto" title="Hand this song back to the automatic class plan">Back to auto</button>':''}
       <div class="grp"><button class="tgrip" type="button" aria-label="Reorder ${esc(t.title)}, position ${i+1} of ${tracks().length}. Drag, or press the up and down arrow keys." title="Drag to reorder — or focus it and press ↑ / ↓">⠿</button><button class="mini" data-act="del" aria-label="Remove">Remove</button></div>
     </div>
@@ -1988,11 +2021,25 @@ $('#tracks').addEventListener('change',e=>{
     moveTrack(from, to, 'key');
   });
 })();
+// Ian's item 23: a real inline preview before adding, without leaving the Creator page —
+// DECIDED as a modal player over an expand-in-place row. Reuses the same data-watch
+// attribute the thumbnails already carried (previously just opened a new tab).
+function openPreview(videoId){
+  $('#previewFrame').src = 'https://www.youtube.com/embed/'+encodeURIComponent(videoId)+'?autoplay=1&rel=0&playsinline=1';
+  $('#previewDlg').showModal();
+}
+function closePreview(){
+  $('#previewFrame').src = ''; // stop playback, don't just hide it
+  $('#previewDlg').close();
+}
+$('#previewClose').onclick = closePreview;
+$('#previewDlg').addEventListener('click',e=>{ if(e.target===$('#previewDlg')) closePreview(); });
+$('#previewDlg').addEventListener('close', closePreview);
 $('#results').addEventListener('click',e=>{
-  // Confirm it's the right/official video before committing to it — opens the actual
-  // YouTube page in a new tab rather than guessing from a thumbnail alone.
+  // Confirm it's the right/official video before committing to it — plays it right here in
+  // a modal instead of sending Ian off to a new tab.
   const w = e.target.closest('[data-watch]');
-  if(w){ window.open('https://www.youtube.com/watch?v='+encodeURIComponent(w.dataset.watch), '_blank', 'noopener'); return; }
+  if(w){ openPreview(w.dataset.watch); return; }
   const b1 = e.target.closest('[data-add]');
   if(b1){ addFromMeta(lastResults[+b1.dataset.add]); b1.textContent = 'Added'; b1.disabled = true; return; }
   const b2 = e.target.closest('[data-addmash]');
