@@ -182,7 +182,7 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
    scrub); mashups get a plain <audio> element off the same pCloud-resolve path the ride screen
    already uses. Both drive the #fsplayhead line above via a polled currentTime. */
 #fMediaWrap{margin:2px 0 12px}
-#fMediaBox{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+#fMediaBox{position:relative;width:240px;max-width:60%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
 #fYt{position:absolute;inset:0}
 #fYt iframe{width:100%;height:100%;display:block}
 #fAudioPlayer{width:100%;margin-top:2px}
@@ -193,8 +193,16 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 .fshandle{position:absolute;top:-6px;bottom:-6px;width:14px;margin-left:-7px;cursor:ew-resize;z-index:2;display:flex;align-items:center;justify-content:center}
 .fshandle::before{content:"";position:absolute;top:6px;bottom:6px;left:6px;width:2px;background:rgba(255,255,255,.55);border-radius:2px;box-shadow:0 0 4px rgba(0,0,0,.6)}
 .fshandle:hover::before,.fshandle.dragging::before{background:#fff;width:3px;left:5.5px}
-.fshandlerm{position:absolute;top:-22px;left:50%;transform:translateX(-50%);width:18px;height:18px;border-radius:50%;background:#e5484d;color:#fff;border:0;font-size:12px;font-weight:800;line-height:18px;text-align:center;padding:0;display:none;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.5)}
-.fshandle:hover .fshandlerm{display:block}
+/* Always visible now, not hover-gated — hover used to require lining the cursor up exactly on
+   a 14px-wide handle and it wasn't reliable ("I'm trying to remove a marker but I can't"). It
+   dims slightly at rest and comes to full opacity on hover/drag, so it's still clickable at all
+   times, in every style, not just when it happens to be noticed. */
+.fshandlerm{position:absolute;top:-22px;left:50%;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;background:#e5484d;color:#fff;border:0;font-size:13px;font-weight:800;line-height:20px;text-align:center;padding:0;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.5);opacity:.65;transition:opacity .12s}
+.fshandle:hover .fshandlerm,.fshandle.dragging .fshandlerm{opacity:1}
+/* Same idea for adding a step: a small always-visible "+" on every block wide enough to hold
+   one, not just the double-click gesture. */
+.fsaddbtn{position:absolute;top:3px;left:50%;transform:translateX(-50%);width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.35);color:#fff;border:1px solid rgba(255,255,255,.5);font-size:13px;font-weight:800;line-height:16px;text-align:center;padding:0;cursor:pointer;opacity:.7;transition:opacity .12s,background .12s;z-index:1}
+.fsblock:hover .fsaddbtn{opacity:1;background:rgba(0,0,0,.55)}
 /* race steps read as a moving full spectrum, not one flat zone colour */
 .strip i.spec,.hwseg.spec{background:linear-gradient(90deg,#2f7dff,#2fd07a,#ffd21f,#ff3b3b,#ff7ad9,#2f7dff)!important;background-size:260% 100%!important;animation:specslide 5s linear infinite}
 @keyframes specslide{to{background-position:260% 0}}
@@ -309,6 +317,11 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .tabs .btn.primary{background:var(--panel2);color:var(--text);box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
 .tabs .btn:hover{color:var(--text)}
 #panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:linear-gradient(180deg,#171d29,#12161f);border-left:1px solid var(--line);min-height:0;overflow:hidden;text-align:center}
+/* Ian: the panel can run taller than the available height on some screens, and the controls row
+   (including "Full screen") used to just get clipped by #panel's own overflow:hidden with no way
+   to reach it. #panelScroll takes the flexible space and scrolls on its own if it must; .controls
+   is pinned outside it, at a fixed size, so it's always on screen. */
+#panelScroll{display:flex;flex-direction:column;gap:inherit;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden}
 #zoneKey{display:flex;flex-wrap:wrap;justify-content:center;gap:6px;font-size:clamp(10px,1.3vh,13px);font-weight:700;color:var(--muted)}
 #zoneKey .zk{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;background:rgba(255,255,255,.05);border:1px solid transparent;transition:background-color .2s,border-color .2s,color .2s}
 #zoneKey .zk i{width:9px;height:9px;border-radius:50%;background:var(--zk);flex:none;box-shadow:0 0 0 1px rgba(255,255,255,.25) inset}
@@ -434,6 +447,20 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
   font-style:normal;font-weight:800;font-size:clamp(20px,2.6vw,42px);color:#fff;
   text-shadow:0 0 22px var(--zone-next),0 3px 10px rgba(0,0,0,.85)}
 @keyframes cdtick{0%{transform:scale(1.55);opacity:.3}100%{transform:scale(1);opacity:1}}
+/* Ian: "in the on screen countdown, I'd like it to say the color that we switched to... so
+   3 2 1 GREEN." The 5-4-3-2-1 countdown already names the destination as a small caption the
+   whole time (#cdCue) — this adds the missing beat at the very end: right as the color actually
+   changes, the new color's name appears big, in the same spot, like it's the last count. It's a
+   separate element from #cdLight (not just reusing it) because #cdLight gets hidden by the very
+   next countdown frame once the new segment isn't "hot" anymore — this needs its own short-lived
+   lifecycle so that hide can't cut the flash off before it's seen. */
+#arriveFlash{position:absolute;left:50%;bottom:5%;transform:translateX(-50%);z-index:15;pointer-events:none;
+  display:flex;align-items:center;justify-content:center;
+  width:clamp(130px,17vw,250px);height:clamp(130px,17vw,250px);border-radius:50%;
+  background:radial-gradient(circle at 50% 47%,var(--zone) 0%,rgba(0,0,0,0) 68%);opacity:0;transition:opacity .25s ease}
+#arriveFlash.show{opacity:.96}
+#arriveFlash span{font-family:var(--disp);font-weight:900;font-size:clamp(32px,5.4vw,68px);line-height:1;color:#fff;
+  letter-spacing:.01em;text-shadow:0 0 26px var(--zone),0 0 78px var(--zone),0 4px 12px rgba(0,0,0,.8)}
 /* last-10-seconds warning: the ride view's outer zone-color frame pulses too, not just the callout */
 @keyframes edgepulse{0%,100%{opacity:1}50%{opacity:.3}}
 #ride.edgehot::after{animation:edgepulse .55s ease-in-out infinite}
@@ -460,7 +487,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
    segments, where a plain glowing white line used to disappear entirely. */
 #nowLine{position:absolute;top:0;bottom:0;width:5px;margin-left:-2px;background:#fff;box-shadow:-3px 0 6px -1px rgba(0,0,0,.65),3px 0 6px -1px rgba(0,0,0,.65),0 0 16px 2px rgba(255,255,255,.85);z-index:3}
 #nowLine span{position:absolute;top:8px;left:9px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.7);border-radius:4px;padding:1px 6px;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
-.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;flex:none}
 .controls .btn{padding:7px 10px;font-size:clamp(12px,1.7vh,15px)}
 @media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
 </style>
@@ -610,12 +637,19 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     <div id="classProgressLabel"></div>
   </div>
   <button id="rideExit" title="Exit class" aria-label="Exit class">&times;</button>
-  <div id="stage"><div id="yt"></div><div id="cdLight" hidden aria-hidden="true"><span id="cdNum">5</span><em id="cdCue"></em></div><div id="mashupSaver" hidden>
+  <div id="stage"><div id="yt"></div><div id="cdLight" hidden aria-hidden="true"><span id="cdNum">5</span><em id="cdCue"></em></div><div id="arriveFlash" hidden aria-hidden="true"><span></span></div><div id="mashupSaver" hidden>
     <div id="mashupArt"></div>
     <div id="mashupCrawl"></div>
     <div id="mashupMeta"><b id="mashupMetaTitle"></b><span id="mashupMetaArtist"></span></div>
   </div></div>
   <aside id="panel" aria-label="Workout guide">
+    <!-- Ian: "the bottom is getting cut off again so I can't see all the buttons including the
+         full screen" — the panel's content plus controls can exceed the available height on
+         some screens (projector resolutions especially). Rather than clip (the old #panel
+         overflow:hidden) or rely on scrolling past the controls, only the stuff above the
+         controls row scrolls if it has to — the controls themselves (Full screen included) stay
+         pinned at the bottom of the panel, always visible. -->
+    <div id="panelScroll">
     <div id="zoneKey" aria-label="Color zone key"></div>
     <div class="np">
       <div class="nt" id="npTitle"></div>
@@ -649,6 +683,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       <div class="stat"><span class="k">Song left</span><span class="v" id="songLeft">0:00</span></div>
     </div>
     <div id="hw"><div id="hwInner"></div><div id="nowLine"><span>NOW</span></div></div>
+    </div>
     <div class="controls">
       <button class="btn" id="cPrev">Prev</button>
       <button class="btn" id="cPlay">Pause</button>
@@ -763,6 +798,17 @@ const GOALS = {
   high:      {label:'High intensity', peak:4, base:1, work:30, rest:45}
 };
 const STYLES = {interval:'Intervals', timetrial:'Time trial', race:'Race', pyramid:'Pyramid', climb:'Climb', warmup:'Warm up', recover:'Cool down', custom:'Custom'};
+// Ian: "we should be able to call it certain things (such as intervals) if I updated it" — once
+// a style's bar is hand-edited it still switches to the engine's 'custom' style internally (see
+// item 27), but it shouldn't just read as generic "Custom" everywhere it's shown. o.customBase
+// remembers which style it started as (set alongside o.customSegs — see dialogState/fsEnsureCustom)
+// so the track card, the ride screen's workout-type banner, and the Remix it info line can all
+// still call it "Intervals (edited)" instead of losing that context.
+function styleLabel(o){
+  if(!o) return '';
+  if(o.style==='custom' && o.customBase && STYLES[o.customBase]) return STYLES[o.customBase]+' (edited)';
+  return STYLES[o.style] || '';
+}
 const GENRE_BPM = {'Pop':112,'Hip-hop':96,'R&B':92,'Rock':125,'House / EDM':126,'Techno':132,'Latin':100,'Country':106,'Disco / Throwback':118,'Mashup / Remix':122,'Other':118};
 const KEYWORDS = [
   [/mashup|bootleg|remix|\bedit\b/i,'Mashup / Remix'],
@@ -1851,7 +1897,7 @@ function trackHTML(t,i){
         <button class="mini" data-act="half" title="Half tempo">&frac12;</button><button class="mini" data-act="double" title="Double tempo">&times;2</button>
       </div>
       <div class="strip">${stripHTML(t.plan.segs,t.plan.D,t.plan.off)}</div>
-      <div class="tplan"><b>${STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}${t.plan.off>0?`<span title="The plan starts after the intro">Starts ${fmt(t.plan.off)}</span>`:''}${iv}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.manual?'<span class="pin" title="You set this one by hand — the automatic class plan leaves it alone">Remixed</span>':''}</div>
+      <div class="tplan"><b>${styleLabel(t.opts)||STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}${t.plan.off>0?`<span title="The plan starts after the intro">Starts ${fmt(t.plan.off)}</span>`:''}${iv}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.manual?'<span class="pin" title="You set this one by hand — the automatic class plan leaves it alone">Remixed</span>':''}</div>
     </div>
     <div class="tacts">
       <button class="btn" data-act="quick" title="Quickly re-roll this song's automatic plan">One-tap plan</button>
@@ -2235,6 +2281,10 @@ function fsTotalSec(){ return customSegs.reduce((a,s)=>a+s.dur,0) || 1; }
 // Whatever style the song had when the Remix it dialog was opened — "Reset to automatic" goes
 // back to this, discarding customSegs, rather than to some arbitrary default.
 let origStyle = 'auto';
+// The style name to keep showing once edited (e.g. "Intervals (edited)" instead of "Custom") —
+// see styleLabel() above. Persisted onto opts.customBase by dialogState() so it survives Apply,
+// reopening the dialog, and the track card/ride-screen labels.
+let customBase = null;
 function seedCustomSegsFromCurrentPlan(){
   const {temp,o} = dialogState();
   const plan = buildPlan(temp,{...o,style:o.style==='custom'?origStyle:o.style});
@@ -2267,7 +2317,7 @@ function dialogState(){
   const temp = {...dT, bpm:clamp(+$('#fBpm').value||dT.bpm,60,200), offset: dT.offsetManual ? clamp(+$('#fOff').value||0,0,240) : 0, offsetManual:!!dT.offsetManual, dur:parseDur($('#fDur').value)||dT.dur};
   let o = {style,goal,ttZone:$('#fTT').value,workSec:$('#fWork').value,restSec:$('#fRest').value};
   if(style==='auto') o = {...o,...quickPick(temp,goal,0)};
-  if(style==='custom') o.customSegs = customSegs;
+  if(style==='custom'){ o.customSegs = customSegs; o.customBase = customBase || null; }
   return {temp,o};
 }
 // Renders #fStrip as the one editable bar — every style, not just Custom. When the style is
@@ -2290,11 +2340,17 @@ function renderFStrip(){
   blocks.forEach((s,i)=>{
     const leftPct = acc/total*100, widthPct = s.dur/total*100;
     acc += s.dur;
-    html += `<div class="fsblock" data-idx="${i}" style="left:${leftPct}%;width:${widthPct}%;background:${ZONES[s.z].color}" title="${ZONES[s.z].name} — ${fmt(s.dur)}. Click to change color, double-click to split.">${widthPct>=6?`<span>${fmt(s.dur)}</span>`:''}</div>`;
+    // The "+" (add a step here) sits on every block, always visible — not just on double-click —
+    // so adding is just as discoverable as removing, in every style, not only once it's Custom.
+    const addBtn = widthPct>=10 ? `<button type="button" class="fsaddbtn" data-add="${i}" title="Split this block into two steps">+</button>` : '';
+    html += `<div class="fsblock" data-idx="${i}" style="left:${leftPct}%;width:${widthPct}%;background:${ZONES[s.z].color}" title="${ZONES[s.z].name} — ${fmt(s.dur)}. Click to change color, double-click (or the + button) to split.">${addBtn}${widthPct>=6?`<span>${fmt(s.dur)}</span>`:''}</div>`;
   });
   acc = 0;
   for(let i=0;i<blocks.length-1;i++){
     acc += blocks[i].dur;
+    // The × used to only appear on hover, which turned out to be unreliable ("I'm trying to
+    // remove a marker but I can't") — it's now always visible so removing a step is as
+    // dependable as adding one, in every style.
     html += `<div class="fshandle" data-idx="${i}" style="left:${acc/total*100}%"><button type="button" class="fshandlerm" data-rm="${i}" title="Remove this boundary — merges the two blocks">&times;</button></div>`;
   }
   html += '<div id="fPlayhead" class="fsplayhead"></div>';
@@ -2328,10 +2384,22 @@ function fsEnsureCustom(){
   const {o} = dialogState();
   if(o.style!=='custom'){
     origStyle = o.style;
+    customBase = o.style;
     seedCustomSegsFromCurrentPlan();
     setChip($('#fStyle'),'custom');
   }
   return customSegs;
+}
+// Shared by the double-click gesture and the always-visible "+" button on each block — adding
+// and removing steps needs to work the same easy way regardless of how it's triggered, and
+// regardless of which style the bar started as (item 27 follow-up: "easy to add or remove steps
+// in all modes").
+function splitBlockAt(idx){
+  const segs = fsEnsureCustom(), s = segs[idx];
+  if(!s || s.dur < 10) return; // need at least two 5s halves
+  const half = Math.round(s.dur/2);
+  segs.splice(idx,1,{z:s.z,dur:half},{z:s.z,dur:s.dur-half});
+  syncDialog();
 }
 function syncDialog(){
   const {temp,o} = dialogState();
@@ -2347,7 +2415,7 @@ function syncDialog(){
   if(!dT.offsetManual) $('#fOff').value = Math.round(plan.off);
   $('#offNote').textContent = dT.offsetManual ? 'Set by you.' : (plan.off>0 ? 'Chosen automatically for a time trial.' : 'Automatic.');
   let info = STYLES[plan.style]+', effort '+e.level+' of 5.';
-  if(o.style==='custom') info = 'Customized, effort '+e.level+' of 5 — '+fmt(plan.D)+' total.';
+  if(o.style==='custom') info = (styleLabel(o)||'Customized')+', effort '+e.level+' of 5 — '+fmt(plan.D)+' total.';
   else {
     if(plan.off>0) info += ' Starts at '+fmt(plan.off)+(plan.style==='timetrial' && !temp.offsetManual ? ' so the intro plays first.' : '.');
     info += ' Steps snap to '+Math.round(unitSec(temp.bpm))+'-second phrases so changes land on the music.';
@@ -2361,6 +2429,10 @@ $('#fStrip').addEventListener('click',e=>{
     if(segs.length>1){ segs[i].dur += segs[i+1].dur; segs.splice(i+1,1); syncDialog(); }
     return;
   }
+  if(e.target.closest('[data-add]')){
+    splitBlockAt(+e.target.closest('[data-add]').dataset.add);
+    return;
+  }
   const b = e.target.closest('.fsblock'); if(!b || b.dataset.dragged==='1') return;
   const idx = +b.dataset.idx, segs = fsEnsureCustom();
   segs[idx].z = (segs[idx].z+1)%ZONES.length;
@@ -2369,11 +2441,7 @@ $('#fStrip').addEventListener('click',e=>{
 $('#fStrip').addEventListener('dblclick',e=>{
   if(!dT) return;
   const b = e.target.closest('.fsblock'); if(!b) return;
-  const segs = fsEnsureCustom(), idx = +b.dataset.idx, s = segs[idx];
-  if(s.dur < 10) return; // need at least two 5s halves
-  const half = Math.round(s.dur/2);
-  segs.splice(idx,1,{z:s.z,dur:half},{z:s.z,dur:s.dur-half});
-  syncDialog();
+  splitBlockAt(+b.dataset.idx);
 });
 // Dragging a boundary handle resizes the two blocks on either side of it — the bar's total
 // length never changes, since it's always meant to span the whole song.
@@ -2412,7 +2480,7 @@ $('#fStrip').addEventListener('pointerup',fsDragEnd);
 $('#fStrip').addEventListener('pointercancel',fsDragEnd);
 $('#fResetCustom').onclick = ()=>{
   setChip($('#fStyle'),origStyle==='custom'?'auto':origStyle);
-  customSegs = [];
+  customSegs = []; customBase = null;
   syncDialog();
 };
 
@@ -2524,6 +2592,7 @@ $('#fAutoDetect').onclick = async ()=>{
       segs.push({z: i===0?0:Math.min(4,i+1), dur: Math.max(5,Math.round(t-prev))}); prev = t;
     });
     origStyle = (dT.opts.style && dT.opts.style!=='custom') ? dT.opts.style : origStyle;
+    customBase = (dT.opts.customBase) || origStyle;
     customSegs = segs;
     setChip($('#fStyle'),'custom');
     syncDialog();
@@ -2544,6 +2613,7 @@ function openDialog(t){
   // last built with a real style (not Custom) — falls back to Quick pick if it was already
   // Custom when the dialog opened, since there's no other style to remember in that case.
   origStyle = (t.opts.style && t.opts.style!=='custom') ? t.opts.style : 'auto';
+  customBase = t.opts.customBase || (t.opts.style && t.opts.style!=='custom' ? t.opts.style : null);
   $('#dlgTitle').textContent = t.title;
   setChip($('#fGoal'), t.opts.goal||'balanced');
   setChip($('#fTT'), t.opts.ttZone==null?'':String(t.opts.ttZone));
@@ -2704,6 +2774,21 @@ function layoutHighway(){
   lastIdx = -2;
 }
 function setZoneVars(z){ const r = $('#ride'); r.style.setProperty('--zone',ZONES[z].color); }
+// "3 2 1 GREEN" — see the CSS comment on #arriveFlash for why this needs to be its own element
+// rather than reusing #cdLight.
+let arriveTimer = null;
+function flashArrivedColor(name){
+  const el = $('#arriveFlash'); if(!el) return;
+  clearTimeout(arriveTimer);
+  el.hidden = false;
+  el.querySelector('span').textContent = name;
+  void el.offsetWidth;
+  el.classList.add('show');
+  arriveTimer = setTimeout(()=>{
+    el.classList.remove('show');
+    setTimeout(()=>{ if(!el.classList.contains('show')) el.hidden = true; },260);
+  },900);
+}
 // Race steps: swap the single zone colour for the moving full spectrum.
 function setSpectrum(on){
   if(spectrumOn === on) return;
@@ -2888,7 +2973,7 @@ function prevTrack(){
 function syncPlayBtn(st){ $('#cPlay').textContent = st===1 ? 'Pause' : 'Play'; }
 function workoutTypeText(t){
   const p = t.plan; if(!p) return '';
-  const label = STYLES[p.style] || '';
+  const label = styleLabel(t.opts) || STYLES[p.style] || '';
   if(p.style==='interval' && t.opts && t.opts.workSec) return label+' · '+t.opts.workSec+'s on / '+t.opts.restSec+'s off';
   return label;
 }
@@ -2958,6 +3043,7 @@ function frame(){
       else if(seg.effect==='tunnel'){ bigName = 'Tunnel'; subLabel = 'Almost through'; }
       setZoneName(bigName); setText('zoneLabel', subLabel);
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
+      if(lastIdx!==-2) flashArrivedColor(seg.race ? 'RACE' : z.name.toUpperCase());
       // :not(.lead) — the intro block (if any) isn't one of the indexed plan segments, so
       // it has to be excluded here or every real segment's "past" index would be off by one.
       hwInner.querySelectorAll('.hwseg:not(.lead)').forEach((el,i)=>el.classList.toggle('past',i<idx));
