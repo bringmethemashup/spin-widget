@@ -117,10 +117,27 @@ check('a plan covers the whole song with no gaps, overlaps or bad zones', () => 
     }
   }
 });
-check('a song offset shortens the planned time, it is not ignored', () => {
-  const a = buildPlan(song({ dur:240, offset:0 }), { style:'interval', goal:'balanced' });
-  const b = buildPlan(song({ dur:240, offset:30 }), { style:'interval', goal:'balanced' });
+check('a manually-set song offset shortens the planned time, it is not ignored', () => {
+  // Since the fourteenth-update "get ready" change, every automatic style now gets its own
+  // computed lead-in by default (see planOffset) — a plain t.offset only wins over that once
+  // the instructor has actually edited it by hand (t.offsetManual), same as Time Trial always
+  // worked. Without that flag this fixture would now get the automatic lead-in for both a
+  // and b (identical durations), making them equal instead of 30s apart.
+  const a = buildPlan(song({ dur:240, offset:0, offsetManual:true }), { style:'interval', goal:'balanced' });
+  const b = buildPlan(song({ dur:240, offset:30, offsetManual:true }), { style:'interval', goal:'balanced' });
   eq(Math.round(a.D - b.D), 30, 'a 30s offset should remove 30s of plan');
+});
+check('every automatic style gets a brief "get ready" lead-in by default, not just time trial', () => {
+  // Ian, 2026-09-22 (post-class notes, second batch): "we don't typically start a song in
+  // green or higher ... that should be in most modes" — this is the behavior change itself.
+  for(const style of ['interval','pyramid','climb','race']){
+    const p = buildPlan(song({dur:210, bpm:130}), {style, goal:'balanced'});
+    ok(p.off > 0, style+': expected an automatic lead-in offset, got '+p.off);
+  }
+  // Custom is fully hand-set and explicitly excluded — the instructor already controls
+  // every block including the first one, so no offset should be injected on top of it.
+  const custom = buildPlan(song({dur:210}), {style:'custom', customSegs:[{z:2,dur:60}]});
+  eq(custom.off, 0, 'a Custom plan should not get an automatic lead-in');
 });
 check('a cool down never sends anyone into the red', () => {
   for(const dur of [90, 210, 400]){
