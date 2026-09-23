@@ -448,19 +448,13 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
   text-shadow:0 0 22px var(--zone-next),0 3px 10px rgba(0,0,0,.85)}
 @keyframes cdtick{0%{transform:scale(1.55);opacity:.3}100%{transform:scale(1);opacity:1}}
 /* Ian: "in the on screen countdown, I'd like it to say the color that we switched to... so
-   3 2 1 GREEN." The 5-4-3-2-1 countdown already names the destination as a small caption the
-   whole time (#cdCue) — this adds the missing beat at the very end: right as the color actually
-   changes, the new color's name appears big, in the same spot, like it's the last count. It's a
-   separate element from #cdLight (not just reusing it) because #cdLight gets hidden by the very
-   next countdown frame once the new segment isn't "hot" anymore — this needs its own short-lived
-   lifecycle so that hide can't cut the flash off before it's seen. */
-#arriveFlash{position:absolute;left:50%;bottom:5%;transform:translateX(-50%);z-index:15;pointer-events:none;
-  display:flex;align-items:center;justify-content:center;
-  width:clamp(130px,17vw,250px);height:clamp(130px,17vw,250px);border-radius:50%;
-  background:radial-gradient(circle at 50% 47%,var(--zone) 0%,rgba(0,0,0,0) 68%);opacity:0;transition:opacity .25s ease}
-#arriveFlash.show{opacity:.96}
-#arriveFlash span{font-family:var(--disp);font-weight:900;font-size:clamp(32px,5.4vw,68px);line-height:1;color:#fff;
-  letter-spacing:.01em;text-shadow:0 0 26px var(--zone),0 0 78px var(--zone),0 4px 12px rgba(0,0,0,.8)}
+   3 2 1 GREEN. I want that as part of the pop up on top of the video." So this is the SAME
+   #cdLight popup that just counted 3, 2, 1 — not a second element somewhere else. Right as the
+   color changes, flashArrivedColor() (in the JS) holds this popup on the new color's name for a
+   beat before the normal countdown logic resumes. The glow behind the text switches to the
+   just-arrived color (--zone) instead of the upcoming one (--zone-next) for that beat. */
+#cdLight.arrived{background:radial-gradient(circle at 50% 47%,var(--zone) 0%,rgba(0,0,0,0) 68%)}
+#cdLight.arrived span{text-shadow:0 0 26px var(--zone),0 0 78px var(--zone),0 4px 12px rgba(0,0,0,.8)}
 /* last-10-seconds warning: the ride view's outer zone-color frame pulses too, not just the callout */
 @keyframes edgepulse{0%,100%{opacity:1}50%{opacity:.3}}
 #ride.edgehot::after{animation:edgepulse .55s ease-in-out infinite}
@@ -637,7 +631,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     <div id="classProgressLabel"></div>
   </div>
   <button id="rideExit" title="Exit class" aria-label="Exit class">&times;</button>
-  <div id="stage"><div id="yt"></div><div id="cdLight" hidden aria-hidden="true"><span id="cdNum">5</span><em id="cdCue"></em></div><div id="arriveFlash" hidden aria-hidden="true"><span></span></div><div id="mashupSaver" hidden>
+  <div id="stage"><div id="yt"></div><div id="cdLight" hidden aria-hidden="true"><span id="cdNum">5</span><em id="cdCue"></em></div><div id="mashupSaver" hidden>
     <div id="mashupArt"></div>
     <div id="mashupCrawl"></div>
     <div id="mashupMeta"><b id="mashupMetaTitle"></b><span id="mashupMetaArtist"></span></div>
@@ -2774,21 +2768,6 @@ function layoutHighway(){
   lastIdx = -2;
 }
 function setZoneVars(z){ const r = $('#ride'); r.style.setProperty('--zone',ZONES[z].color); }
-// "3 2 1 GREEN" — see the CSS comment on #arriveFlash for why this needs to be its own element
-// rather than reusing #cdLight.
-let arriveTimer = null;
-function flashArrivedColor(name){
-  const el = $('#arriveFlash'); if(!el) return;
-  clearTimeout(arriveTimer);
-  el.hidden = false;
-  el.querySelector('span').textContent = name;
-  void el.offsetWidth;
-  el.classList.add('show');
-  arriveTimer = setTimeout(()=>{
-    el.classList.remove('show');
-    setTimeout(()=>{ if(!el.classList.contains('show')) el.hidden = true; },260);
-  },900);
-}
 // Race steps: swap the single zone colour for the moving full spectrum.
 function setSpectrum(on){
   if(spectrumOn === on) return;
@@ -2799,8 +2778,15 @@ function setSpectrum(on){
 // The glowing warning light over the video for the last seconds of a step. Normally only
 // the last 10s (a big digit). Ahead of a race specifically it opens up to a 30s window —
 // riders should see "Get ready" well before the effort actually starts, not just a 10-count.
+// Ian: "3 2 1 GREEN" — the destination color should be the last count, right in this same
+// popup, not a separate element bolted on elsewhere. arriveHoldUntil is a short window, right
+// as the segment actually changes, where this popup is held on the just-arrived color's name
+// instead of being driven by the normal countdown math — see flashArrivedColor below.
+let arriveHoldUntil = 0;
 function setCountdown(secs,cue){
   const el = $('#cdLight');
+  if(performance.now() < arriveHoldUntil) return; // let "3 2 1 GREEN" finish its beat first
+  el.classList.remove('arrived');
   if(secs == null){ if(cdLast!==null){ el.hidden = true; cdLast = null; el.classList.remove('cdtext'); } return; }
   if(el.hidden) el.hidden = false;
   setText('cdCue', cue || '');
@@ -2819,6 +2805,20 @@ function setCountdown(secs,cue){
     cdLast = n; setText('cdNum',String(n));
     el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
   }
+}
+// Right as a color actually changes, this takes over the SAME on-video popup that was just
+// counting 3, 2, 1 and holds it on the new color's name for a beat — "3 2 1 GREEN" as one
+// continuous sequence, not a second popup appearing somewhere else.
+function flashArrivedColor(name){
+  const el = $('#cdLight');
+  el.hidden = false;
+  el.classList.remove('cdtext');
+  el.classList.add('arrived');
+  setText('cdNum', name);
+  setText('cdCue','');
+  cdLast = 'arrived:'+name;
+  el.classList.remove('tick'); void el.offsetWidth; el.classList.add('tick');
+  arriveHoldUntil = performance.now() + 900;
 }
 
 function showRide(){
