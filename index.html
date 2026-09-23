@@ -358,7 +358,14 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .zonecard.flash{animation:flash .45s ease-in-out 3}
 @keyframes flash{50%{filter:brightness(1.55) saturate(1.2);transform:scale(1.025)}}
 .timerrow{display:flex;align-items:flex-end;justify-content:center;gap:14px}
+.timerwrap{display:flex;flex-direction:column;align-items:center;gap:6px}
 #timer{font-family:var(--disp);font-weight:800;font-size:clamp(58px,12.5vh,160px);line-height:.9;font-variant-numeric:tabular-nums;text-shadow:0 0 40px rgba(47,125,255,.25)}
+/* Small elapsed-in-this-step sub-bar shown under the big timer when it's counting DOWN (the
+   default per Ian's item 11), so the "how far in am I" info counting up doesn't disappear —
+   it just moves to a smaller, secondary readout instead of being the headline number. */
+#timerSub{width:min(220px,70%);height:5px;border-radius:3px;background:rgba(255,255,255,.14);overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.06) inset}
+#timerSub[hidden]{display:none}
+#timerSubBar{display:block;height:100%;width:0%;background:currentColor;opacity:.75;transition:width .25s linear}
 #timerMode{align-self:flex-start;margin-top:6px;font-size:clamp(12px,1.6vh,15px)}
 #callout{display:flex;align-items:center;justify-content:center;gap:.18em;border-radius:14px;padding:8px 14px;background:var(--panel2);font-weight:700;font-size:clamp(15px,2.6vh,28px);line-height:1.15;box-shadow:var(--shadow-sm);flex-wrap:wrap}
 #callout.long{font-size:clamp(14px,2.4vh,26px)}
@@ -592,7 +599,10 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       <div class="zonelabel" id="zoneLabel">Press play</div>
     </div>
     <div class="timerrow">
-      <div id="timer">0:00</div>
+      <div class="timerwrap">
+        <div id="timer">0:00</div>
+        <div id="timerSub" title="Elapsed in this step"><i id="timerSubBar"></i></div>
+      </div>
       <button class="mini" id="timerMode">Counting down</button>
     </div>
     <div id="callout"><span class="sw"></span><span id="calloutText"></span></div>
@@ -1358,7 +1368,7 @@ let toastT;
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{el.hidden=true;},3600); }
 
 // ---------- state ----------
-const store = {tracks:[], apiKey:'', keyOK:false, countUp:true, look:90, playlists:[], currentId:null, classLen:45, theme:''};
+const store = {tracks:[], apiKey:'', keyOK:false, countUp:false, look:90, playlists:[], currentId:null, classLen:45, theme:''};
 function save(){ try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){} }
 function loadStore(){
   try{
@@ -1366,8 +1376,10 @@ function loadStore(){
     if(s) Object.assign(store,s);
   }catch(e){}
   store.playlists = store.playlists || [];
-  // one-time migration: counting-up is now the default (matches what she calls out on the bike)
-  if(!store._countUpMigrated){ store.countUp = true; store._countUpMigrated = true; save(); }
+  // one-time migration: counting-up was briefly the default; Ian's item 11 asked to flip back
+  // to counting DOWN (time remaining) as the default, with a small elapsed sub-bar underneath
+  // instead. Only forces the flip once, so a rider who later picks "Counting up" again keeps it.
+  if(!store._countDownMigrated2){ store.countUp = false; store._countDownMigrated2 = true; save(); }
 }
 loadStore();
 let uidSeq = Date.now();
@@ -2646,6 +2658,14 @@ function frame(){
       lastIdx = idx;
     }
     setText('timer', store.countUp ? fmtUp(elapsed) : fmtDown(remain));
+    const tsub = $('#timerSub'), tsubBar = $('#timerSubBar');
+    if(tsub && tsubBar){
+      tsub.hidden = !!store.countUp;
+      if(!store.countUp){
+        const segDur = Math.max(0.001, seg.end-seg.start);
+        tsubBar.style.width = (clamp(elapsed/segDur,0,1)*100)+'%';
+      }
+    }
     const changing = next && (next.z!==seg.z || next.label!==seg.label);
     if(next){
       const nz = ZONES[next.z], nname = next.race ? 'Race' : nz.name;
@@ -2694,6 +2714,12 @@ function frame(){
     setCountdown(-p<=preWindow ? -p : null, first.race ? 'RACE' : fz.name.toUpperCase());
     setText('calloutText','Next: '+(first.race?'Race':fz.name)+' in '+fmtDown(-p));
     hwInner.style.transform = 'translateY('+(nowY-(plan.D-p)*pps)+'px)';
+    const tsub2 = $('#timerSub'), tsubBar2 = $('#timerSubBar');
+    if(tsub2 && tsubBar2){
+      tsub2.hidden = false;
+      const leadDur = Math.max(0.001, plan.off), leadElapsed = Math.max(0, plan.off+p);
+      tsubBar2.style.width = (clamp(leadElapsed/leadDur,0,1)*100)+'%';
+    }
   }
   // Real time-in-zone, from actual wall-clock elapsed while genuinely playing — not the plan.
   // Clamped so a backgrounded tab's huge rAF gap doesn't get counted as ride time.
