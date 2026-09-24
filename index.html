@@ -301,7 +301,28 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
    treatments used on the side-panel card, just sized to wrap the entire screen edge. */
 #ride.race::after{border-color:transparent;background:conic-gradient(from 0deg,#2f7dff,#2fd07a,#ffd21f,#ff3b3b,#ff7ad9,#2f7dff) border-box;-webkit-mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);mask-composite:exclude;animation:spechue 4s linear infinite}
 #ride.fire::after{border-color:transparent;background:linear-gradient(120deg,#ff3b3b,#ff9d1f,#ffcf4d,#ff6a00,#ff3b3b) border-box;background-size:280% 280%;-webkit-mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);mask-composite:exclude;filter:brightness(1.15);animation:firemove .8s linear infinite,firepulse .3s ease-in-out infinite alternate}
-#ride.tunnel::after{border-color:transparent;background:repeating-conic-gradient(from 0deg,#ff3b3b 0deg 5deg,#a30000 5deg 10deg,#3d0000 10deg 15deg) border-box;-webkit-mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);mask-composite:exclude;animation:tunnelspin 1.4s linear infinite}
+/* Ian: "tunnel is NOTTTT what I want. I want the color to move like it is rotating across the
+   box." A thin border ring (like fire/race got) wasn't it — he wants the actual twister disc,
+   the same one the side-panel card already uses, filling the video stage itself ("the big
+   box"), not just tracing its edge. This is that same disc — inset far past the edges,
+   spinning + pulsing in/out, radial-masked to a dark vanishing point in the middle — moved
+   onto #stage and given real opacity so it reads as a moving color wheel over the video, not
+   a decoration around it. See #stage::before below. */
+#stage::before{content:"";position:absolute;inset:-140%;z-index:5;pointer-events:none;border-radius:50%;
+  background:repeating-conic-gradient(from 0deg,#ff3b3b 0deg 5deg,#a30000 5deg 10deg,#2a0000 10deg 15deg);
+  -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 0%,transparent 22%,#000 46%,#000 100%);
+  mask-image:radial-gradient(circle at 50% 50%,transparent 0%,transparent 22%,#000 46%,#000 100%);
+  opacity:0;transition:opacity .3s}
+#ride.tunnel #stage::before{opacity:.55;animation:tunnelspin .6s linear infinite,tunnelpull 1.1s ease-in-out infinite}
+/* "the where it says tunnel, the colors of red behind it rotate so it looks like a twister" —
+   the same disc again, this time sized to sit right behind the on-video "TUNNEL" popup text
+   itself, not just the stage in general. */
+#cdLight::before{content:"";position:absolute;inset:-60%;z-index:-1;border-radius:50%;pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,#ff3b3b 0deg 6deg,#a30000 6deg 12deg,#2a0000 12deg 18deg);
+  -webkit-mask-image:radial-gradient(circle at 50% 50%,transparent 0%,transparent 20%,#000 60%,#000 100%);
+  mask-image:radial-gradient(circle at 50% 50%,transparent 0%,transparent 20%,#000 60%,#000 100%);
+  opacity:0;transition:opacity .3s}
+#ride.tunnel #cdLight::before{opacity:.85;animation:tunnelspin .5s linear infinite}
 #stage{position:relative;background:#000;min-width:0;grid-column:1;grid-row:1}
 #stage iframe,#stage #yt{position:absolute;inset:0;width:100%;height:100%;border:0}
 /* ---- mashup screensaver: exact port of Bring Me The Mashup's Zune-HD-style
@@ -503,7 +524,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #nowLine span{position:absolute;top:8px;left:9px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.7);border-radius:4px;padding:1px 6px;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
 .controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;flex:none}
 .controls .btn{padding:7px 10px;font-size:clamp(12px,1.7vh,15px)}
-@media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
+@media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before,#ride.fire::after,#ride.tunnel::after,#ride.race::after,#stage::before,#cdLight::before{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
 </style>
 </head>
 <body>
@@ -777,7 +798,6 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
              current bar's shape (as fractions of the song, not absolute seconds) under a name,
              and lets it be reapplied to any other song from this same dropdown. -->
         <select class="mini" id="fLoadTiming" title="Apply a saved timing shape to this song"><option value="">Load saved timing…</option></select>
-        <button type="button" class="mini" id="fSaveTiming" hidden>Save this timing ▸</button>
         <button type="button" class="mini" id="fResetCustom" hidden>Reset to automatic</button>
       </div>
     </div>
@@ -830,6 +850,17 @@ function cueName(seg){
   if(seg.effect==='fire') return 'RING OF FIRE';
   if(seg.effect==='tunnel') return 'TUNNEL';
   return ZONES[seg.z].name.toUpperCase();
+}
+// Same idea, title-cased, for the "Next: ___" callout under the timer — Ian: "the 'Next:'
+// section still says red and not ring of fire or tunnel." That text was built from the plain
+// zone name directly, never checking the segment's effect, the same gap cueName() above
+// already closed for the on-video countdown.
+function nextLabel(seg){
+  if(!seg) return '';
+  if(seg.race) return 'Race';
+  if(seg.effect==='fire') return 'Ring of fire';
+  if(seg.effect==='tunnel') return 'Tunnel';
+  return ZONES[seg.z].name;
 }
 // peak = hardest zone the goal uses, base = recovery zone, work/rest = default interval seconds
 const GOALS = {
@@ -2458,7 +2489,6 @@ function syncDialog(){
   syncWR();
   renderFStrip();
   $('#fResetCustom').hidden = o.style!=='custom';
-  $('#fSaveTiming').hidden = o.style!=='custom';
   const plan = buildPlan(temp,o);
   const e = effort(plan.segs);
   if(!dT.offsetManual) $('#fOff').value = Math.round(plan.off);
@@ -2534,12 +2564,25 @@ $('#fResetCustom').onclick = ()=>{
 };
 
 // ===== saved timing presets — reuse a hand-set shape across different songs =====
-// Ian: "I want to save when I customize a song, I want it saved so I can bring back up in
-// other songs and they are already timed with the correct intervals." Stored as {z, frac}
-// blocks (frac = share of the total customSegs duration) so a shape built on a 3:40 song can
-// be dropped onto a 4:15 song and still land proportionally in the same places, not run off
-// the end or leave a gap. Lives in store.timingPresets, synced to localStorage like everything
-// else in store — local to this browser, not the Supabase-backed playlist sync.
+// Ian: "I want to save when I customize a song ... so I can bring back up in other songs and
+// they are already timed with the correct intervals" — then, follow-up: "just automatically
+// save the timing for the video, I don't want to manually save it with a name every time."
+// So no button, no prompt — every time Apply is hit on a hand-timed (Custom) song, its shape
+// is auto-saved/updated under that song's own title. Stored as {z, frac} blocks (frac = share
+// of the total duration) so a shape built on a 3:40 song can be dropped onto a 4:15 song and
+// still land proportionally in the same places. Lives in store.timingPresets (localStorage,
+// local to this browser — not the Supabase-backed playlist sync).
+function autoSaveTiming(title, segs){
+  if(!segs.length) return;
+  const total = segs.reduce((a,s)=>a+s.dur,0) || 1;
+  const frac = segs.map(s=>({z:s.z, frac:s.dur/total}));
+  // Re-saving the same song's timing just updates its existing entry in place, rather than
+  // piling up duplicates every time that song gets tweaked and re-applied.
+  store.timingPresets = store.timingPresets.filter(p=>p.name!==title);
+  store.timingPresets.push({name:title, frac});
+  save();
+  refreshTimingPresetList();
+}
 function refreshTimingPresetList(){
   const sel = $('#fLoadTiming');
   const cur = sel.value;
@@ -2547,19 +2590,6 @@ function refreshTimingPresetList(){
     store.timingPresets.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join('');
   sel.value = store.timingPresets[+cur] ? cur : '';
 }
-$('#fSaveTiming').onclick = ()=>{
-  if(!customSegs.length) return;
-  const name = prompt('Name this timing (e.g. "Verse-chorus climb"):','');
-  if(!name) return;
-  const total = fsTotalSec();
-  const frac = customSegs.map(s=>({z:s.z, frac:s.dur/total}));
-  store.timingPresets = store.timingPresets.filter(p=>p.name!==name);
-  store.timingPresets.push({name, frac});
-  save();
-  refreshTimingPresetList();
-  $('#fLoadTiming').value = String(store.timingPresets.length-1);
-  toast('Saved "'+name+'" — pick it from "Load saved timing" on any song.');
-};
 $('#fLoadTiming').onchange = e=>{
   const i = +e.target.value;
   const preset = store.timingPresets[i];
@@ -2745,6 +2775,7 @@ $('#fApply').onclick = ()=>{
   const {temp,o} = dialogState();
   if(+$('#fBpm').value !== dT.bpm) dT.bpmSrc = 'manual';
   if(!wrTouched){ delete o.workSec; delete o.restSec; }
+  if(o.style==='custom') autoSaveTiming(dT.title, o.customSegs||[]);
   dT.bpm = temp.bpm; dT.offset = temp.offset; dT.dur = temp.dur; dT.durKnown = true;
   dT.opts = o; dT.manual = true; rebuild(dT); dlg.close(); dT = null; save(); renderTracks();
 };
@@ -3169,7 +3200,7 @@ function frame(){
     }
     const changing = next && (next.z!==seg.z || next.label!==seg.label);
     if(next){
-      const nz = ZONES[next.z], nname = next.race ? 'Race' : nz.name;
+      const nz = ZONES[next.z], nname = nextLabel(next);
       $('#ride').style.setProperty('--zone-next',nz.color);
       callout.querySelector('.sw').style.background = nz.color;
       setText('calloutText','Next: '+nname+' in '+fmtDown(remain));
@@ -3214,7 +3245,7 @@ function frame(){
     $('#ride').classList.remove('edgehot');
     const preWindow = first.race ? 30 : 10;
     setCountdown(-p<=preWindow ? -p : null, cueName(first));
-    setText('calloutText','Next: '+(first.race?'Race':fz.name)+' in '+fmtDown(-p));
+    setText('calloutText','Next: '+nextLabel(first)+' in '+fmtDown(-p));
     hwInner.style.transform = 'translateX('+(nowX-(plan.off+p)*pps)+'px)';
     const tsub2 = $('#timerSub'), tsubBar2 = $('#timerSubBar');
     if(tsub2 && tsubBar2){
