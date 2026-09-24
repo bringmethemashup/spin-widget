@@ -182,7 +182,12 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
    scrub); mashups get a plain <audio> element off the same pCloud-resolve path the ride screen
    already uses. Both drive the #fsplayhead line above via a polled currentTime. */
 #fMediaWrap{margin:2px 0 12px}
-#fMediaBox{position:relative;width:240px;max-width:60%;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+/* Ian: "the video player can be smaller" (twenty-seventh update) shrank this to a 240px box —
+   then, trying it live: "video player is too small now that I can't scroll through the song to
+   pick where to break it up." Scrubbing accurately needs real screen space, so this splits the
+   difference — noticeably bigger than the 240px version, still well short of the old full-width
+   16:9 box. */
+#fMediaBox{position:relative;width:100%;max-width:420px;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
 #fYt{position:absolute;inset:0}
 #fYt iframe{width:100%;height:100%;display:block}
 #fAudioPlayer{width:100%;margin-top:2px}
@@ -287,6 +292,16 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
    including the bottom progress bar row — it used to paint underneath that bar's own
    background and looked like it stopped short of it. */
 #ride::after{content:"";position:absolute;inset:0;border:6px solid var(--zone);pointer-events:none;transition:border-color .25s;z-index:19}
+/* Ian: "the border is now yellow which makes no sense" during a race — a race step's own zone
+   index (z===3, used only so the red-cap logic leaves it alone) was leaking into this generic
+   --zone border, painting the whole screen's edge flat yellow instead of the race's rainbow.
+   Same idea for the fire/tunnel peak effects: "ring of fire should have animated fire around
+   the big box" / "the tunnel wheel should rotate around the big box as well" — "the big box"
+   is the whole video stage, so these override the plain border with the same animated
+   treatments used on the side-panel card, just sized to wrap the entire screen edge. */
+#ride.race::after{border-color:transparent;background:conic-gradient(from 0deg,#2f7dff,#2fd07a,#ffd21f,#ff3b3b,#ff7ad9,#2f7dff) border-box;-webkit-mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);mask-composite:exclude;animation:spechue 4s linear infinite}
+#ride.fire::after{border-color:transparent;background:linear-gradient(120deg,#ff3b3b,#ff9d1f,#ffcf4d,#ff6a00,#ff3b3b) border-box;background-size:280% 280%;-webkit-mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);mask-composite:exclude;filter:brightness(1.15);animation:firemove .8s linear infinite,firepulse .3s ease-in-out infinite alternate}
+#ride.tunnel::after{border-color:transparent;background:repeating-conic-gradient(from 0deg,#ff3b3b 0deg 5deg,#a30000 5deg 10deg,#3d0000 10deg 15deg) border-box;-webkit-mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);-webkit-mask-composite:xor;mask:linear-gradient(#000,#000) padding-box,linear-gradient(#000,#000);mask-composite:exclude;animation:tunnelspin 1.4s linear infinite}
 #stage{position:relative;background:#000;min-width:0;grid-column:1;grid-row:1}
 #stage iframe,#stage #yt{position:absolute;inset:0;width:100%;height:100%;border:0}
 /* ---- mashup screensaver: exact port of Bring Me The Mashup's Zune-HD-style
@@ -472,7 +487,12 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #hw{position:relative;flex:none;height:clamp(110px,16vh,170px);border-radius:14px;background:#0c1017;overflow:hidden;border:1px solid var(--line);box-shadow:inset 0 0 24px rgba(0,0,0,.5)}
 #hw::before{content:"";position:absolute;top:0;bottom:0;left:0;width:16%;background:linear-gradient(90deg,#0c1017,rgba(12,16,23,0));z-index:2;pointer-events:none}
 #hwInner{position:absolute;top:0;bottom:0;left:0;will-change:transform}
-.hwseg{position:absolute;top:8px;bottom:8px;border-radius:6px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:6px 12px;overflow:hidden;font-weight:700;font-size:clamp(11px,1.7vh,17px);white-space:nowrap}
+.hwseg{position:absolute;top:8px;bottom:8px;border-radius:6px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;padding:6px 9px;overflow:hidden;font-weight:700;font-size:clamp(11px,1.7vh,17px);white-space:nowrap}
+/* Ian: "the 'Level' mentions in the bar are getting cut off" — the full "Level 3" label plus
+   duration could run wider than the block's actual pixel width (padding included) and get
+   hard-clipped by overflow:hidden mid-word. A shorter "Lvl 3" label plus an ellipsis fallback
+   (instead of a silent clip) covers it whether the block is a little short or a lot short. */
+.hwseg span:first-child{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .hwseg.past{opacity:.28}
 .hwseg.spec span{text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 12px rgba(0,0,0,.7)}
 .hwseg span:last-child{font-variant-numeric:tabular-nums;opacity:.8;font-weight:500}
@@ -749,9 +769,17 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       </div>
     </div>
     <div class="strip big" id="fStrip"></div>
-    <div class="row" style="justify-content:space-between;align-items:center;margin:-6px 0 8px">
+    <div class="row" style="justify-content:space-between;align-items:center;margin:-6px 0 8px;flex-wrap:wrap">
       <span class="wrnote" id="fStripHint">Click a block to change its color. Drag a boundary to retime it. Double-click a block to split it. Hover a boundary for a × to remove it.</span>
-      <button type="button" class="mini" id="fResetCustom" hidden>Reset to automatic</button>
+      <div class="row" style="gap:6px">
+        <!-- Ian: "I want to save when I customize a song, I want it saved so I can bring back up
+             in other songs and they are already timed with the correct intervals." Saves the
+             current bar's shape (as fractions of the song, not absolute seconds) under a name,
+             and lets it be reapplied to any other song from this same dropdown. -->
+        <select class="mini" id="fLoadTiming" title="Apply a saved timing shape to this song"><option value="">Load saved timing…</option></select>
+        <button type="button" class="mini" id="fSaveTiming" hidden>Save this timing ▸</button>
+        <button type="button" class="mini" id="fResetCustom" hidden>Reset to automatic</button>
+      </div>
     </div>
     <div id="fInfo"></div>
     <div class="row end">
@@ -784,6 +812,25 @@ const ZONES = [
 // want prescriptive phrases like "Hold the top" or "Ease down" — plain level numbers matching
 // the zone (white=1 ... red=5) so the instructor calls her own cues over it.
 function levelText(z,race){ return race ? 'Race' : 'Level '+(z+1); }
+// Compact version for the rolling highway specifically, where blocks can be narrow — see
+// Ian's "the 'Level' mentions in the bar are getting cut off".
+function levelTextShort(z,race,effect){
+  if(effect==='fire') return 'Fire';
+  if(effect==='tunnel') return 'Tunnel';
+  return race ? 'Race' : 'Lvl '+(z+1);
+}
+// Ian: "it should say 'ring of fire' and 'tunnel' under the countdown instead of red because
+// that doesn't tell you where you're going." The on-video countdown cue (#cdCue, and the
+// "3 2 1 ___" arrival flash) used to always name the plain zone color, even when the segment
+// it's counting into is one of the capped peak effects — this names the effect instead when
+// there is one, same as the side-panel card already does.
+function cueName(seg){
+  if(!seg) return '';
+  if(seg.race) return 'RACE';
+  if(seg.effect==='fire') return 'RING OF FIRE';
+  if(seg.effect==='tunnel') return 'TUNNEL';
+  return ZONES[seg.z].name.toUpperCase();
+}
 // peak = hardest zone the goal uses, base = recovery zone, work/rest = default interval seconds
 const GOALS = {
   cooldown:  {label:'Cool down',      peak:1, base:0, work:40, rest:40},
@@ -1476,7 +1523,11 @@ let toastT;
 function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>{el.hidden=true;},3600); }
 
 // ---------- state ----------
-const store = {tracks:[], apiKey:'', keyOK:false, countUp:false, look:90, playlists:[], currentId:null, classLen:45, theme:''};
+// Ian: "I want to save when I customize a song ... so I can bring back up in other songs and
+// they are already timed with the correct intervals." A saved timing preset is a shape, not
+// absolute seconds — {z, frac} blocks (frac = share of total duration) so it can be reapplied
+// to a song of a different length and still land at proportionally the same points.
+const store = {tracks:[], apiKey:'', keyOK:false, countUp:false, look:90, playlists:[], currentId:null, classLen:45, theme:'', timingPresets:[]};
 function save(){ try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){} }
 function loadStore(){
   try{
@@ -1484,6 +1535,7 @@ function loadStore(){
     if(s) Object.assign(store,s);
   }catch(e){}
   store.playlists = store.playlists || [];
+  store.timingPresets = store.timingPresets || [];
   // one-time migration: counting-up was briefly the default; Ian's item 11 asked to flip back
   // to counting DOWN (time remaining) as the default, with a small elapsed sub-bar underneath
   // instead. Only forces the flip once, so a rider who later picks "Counting up" again keeps it.
@@ -1894,9 +1946,8 @@ function trackHTML(t,i){
       <div class="tplan"><b>${styleLabel(t.opts)||STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}${t.plan.off>0?`<span title="The plan starts after the intro">Starts ${fmt(t.plan.off)}</span>`:''}${iv}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.manual?'<span class="pin" title="You set this one by hand — the automatic class plan leaves it alone">Remixed</span>':''}</div>
     </div>
     <div class="tacts">
-      <button class="btn" data-act="quick" title="Quickly re-roll this song's automatic plan">One-tap plan</button>
+      <button class="btn" data-act="quick" title="Re-roll this song back onto a fresh automatic plan">One-tap plan</button>
       <button class="btn" data-act="custom" title="Open this song's plan — drag the bar to customize its color and timing">Remix it</button>
-      ${t.manual?'<button class="mini" data-act="auto" title="Hand this song back to the automatic class plan">Back to auto</button>':''}
       <div class="grp"><button class="tgrip" type="button" aria-label="Reorder ${esc(t.title)}, position ${i+1} of ${tracks().length}. Drag, or press the up and down arrow keys." title="Drag to reorder — or focus it and press ↑ / ↓">⠿</button><button class="mini" data-act="del" aria-label="Remove">Remove</button></div>
     </div>
   </li>`;
@@ -1926,8 +1977,11 @@ $('#tracks').addEventListener('click',e=>{
   if(act==='bpm') return;
   // Quick build on one song is an explicit per-song choice, so it pins that song
   // (t.manual) and the automatic class planner stops touching it.
+  // Ian: "I don't need One-tap plan and Back to auto, one-tap plan does both of the same
+  // thing" — the separate "Back to auto" button (t.manual=false + autoPlanClass) is gone;
+  // One-tap plan alone re-rolls the song onto a fresh automatic plan, which covers getting
+  // back to automatic too.
   if(act==='quick'){ t.qb = (t.qb||0)+1; t.opts = quickPick(t,t.opts.goal||'balanced',t.qb>1?1:0); t.manual = true; rebuild(t); }
-  else if(act==='auto'){ t.manual = false; autoPlanClass(ts); toast('Back on the automatic plan.'); }
   // Item 27 (redone per Ian): one button, not two — "Remix it" just opens the dialog on
   // whatever style the song already has. The bar inside is directly editable for every
   // style now, so there's no separate "force straight into Custom" entry point needed
@@ -2404,6 +2458,7 @@ function syncDialog(){
   syncWR();
   renderFStrip();
   $('#fResetCustom').hidden = o.style!=='custom';
+  $('#fSaveTiming').hidden = o.style!=='custom';
   const plan = buildPlan(temp,o);
   const e = effort(plan.segs);
   if(!dT.offsetManual) $('#fOff').value = Math.round(plan.off);
@@ -2476,6 +2531,51 @@ $('#fResetCustom').onclick = ()=>{
   setChip($('#fStyle'),origStyle==='custom'?'auto':origStyle);
   customSegs = []; customBase = null;
   syncDialog();
+};
+
+// ===== saved timing presets — reuse a hand-set shape across different songs =====
+// Ian: "I want to save when I customize a song, I want it saved so I can bring back up in
+// other songs and they are already timed with the correct intervals." Stored as {z, frac}
+// blocks (frac = share of the total customSegs duration) so a shape built on a 3:40 song can
+// be dropped onto a 4:15 song and still land proportionally in the same places, not run off
+// the end or leave a gap. Lives in store.timingPresets, synced to localStorage like everything
+// else in store — local to this browser, not the Supabase-backed playlist sync.
+function refreshTimingPresetList(){
+  const sel = $('#fLoadTiming');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Load saved timing…</option>' +
+    store.timingPresets.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join('');
+  sel.value = store.timingPresets[+cur] ? cur : '';
+}
+$('#fSaveTiming').onclick = ()=>{
+  if(!customSegs.length) return;
+  const name = prompt('Name this timing (e.g. "Verse-chorus climb"):','');
+  if(!name) return;
+  const total = fsTotalSec();
+  const frac = customSegs.map(s=>({z:s.z, frac:s.dur/total}));
+  store.timingPresets = store.timingPresets.filter(p=>p.name!==name);
+  store.timingPresets.push({name, frac});
+  save();
+  refreshTimingPresetList();
+  $('#fLoadTiming').value = String(store.timingPresets.length-1);
+  toast('Saved "'+name+'" — pick it from "Load saved timing" on any song.');
+};
+$('#fLoadTiming').onchange = e=>{
+  const i = +e.target.value;
+  const preset = store.timingPresets[i];
+  e.target.value = '';
+  if(!preset) return;
+  const segs = fsEnsureCustom();
+  const total = fsTotalSec();
+  segs.length = 0;
+  preset.frac.forEach(f=>segs.push({z:f.z, dur:Math.max(5, Math.round(f.frac*total))}));
+  // rounding can drift the sum off the song's real total by a second or two — true it up on
+  // the last block so the bar always adds to exactly the song length.
+  const drift = total - segs.reduce((a,s)=>a+s.dur,0);
+  if(segs.length) segs[segs.length-1].dur = Math.max(5, segs[segs.length-1].dur + drift);
+  customBase = customBase || origStyle;
+  syncDialog();
+  toast('Applied "'+preset.name+'" — drag/recolor from here if it needs a tweak.');
 };
 
 // ===== item 27 follow-up: listen/watch inline while placing boundaries =====
@@ -2618,6 +2718,7 @@ function openDialog(t){
   $('#fRest').value = clamp(+t.opts.restSec || g.rest,10,180);
   $('#fBpm').value = t.bpm; $('#fDur').value = fmt(t.dur);
   $('#fOff').value = Math.round((t.plan && t.plan.off) || t.offset || 0);
+  refreshTimingPresetList();
   syncDialog(); dlg.showModal();
   setupFMedia(t);
 }
@@ -2761,7 +2862,7 @@ function layoutHighway(){
   }
   html += t.plan.segs.map((s,i)=>{
     const w = (s.end-s.start)*pps - 2, left = (off+s.start)*pps + 1, z = ZONES[s.z];
-    return `<div class="hwseg ${s.race?'spec':''}" data-i="${i}" style="left:${left}px;width:${Math.max(2,w)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${w>=42?`<span>${levelText(s.z,s.race)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
+    return `<div class="hwseg ${s.race?'spec':''}" data-i="${i}" style="left:${left}px;width:${Math.max(2,w)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${w>=42?`<span>${levelTextShort(s.z,s.race,s.effect)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
   }).join('');
   hwInner.innerHTML = html;
   $('#nowLine').style.left = nowX+'px';
@@ -3034,6 +3135,13 @@ function frame(){
       card.style.background = seg.race ? '' : z.color; card.style.color = seg.race ? '' : z.ink; setZoneVars(seg.z);
       card.classList.toggle('fire', seg.effect==='fire');
       card.classList.toggle('tunnel', seg.effect==='tunnel');
+      // Ian: "ring of fire should have animated fire around the big box" / "the tunnel wheel
+      // should rotate around the big box as well" — "the big box" is the video stage itself,
+      // not just the small side-panel card. #ride carries the same fire/tunnel/race classes so
+      // the CSS can wrap the whole stage in the same animated border.
+      $('#ride').classList.toggle('fire', seg.effect==='fire');
+      $('#ride').classList.toggle('tunnel', seg.effect==='tunnel');
+      $('#ride').classList.toggle('race', !!seg.race);
       // The big name already says "Race" — the sub-label under it should say something
       // else, not repeat the same word back. Same idea for the capped-red peak effects:
       // Ian, 2026-09-22: "instead of 'red' or 'level 5' it should say 'ring of fire'" /
@@ -3043,7 +3151,7 @@ function frame(){
       else if(seg.effect==='tunnel'){ bigName = 'Tunnel'; subLabel = 'Almost through'; }
       setZoneName(bigName); setText('zoneLabel', subLabel);
       card.classList.remove('flash'); void card.offsetWidth; card.classList.add('flash');
-      if(lastIdx!==-2) flashArrivedColor(seg.race ? 'RACE' : z.name.toUpperCase());
+      if(lastIdx!==-2) flashArrivedColor(cueName(seg));
       // :not(.lead) — the intro block (if any) isn't one of the indexed plan segments, so
       // it has to be excluded here or every real segment's "past" index would be off by one.
       hwInner.querySelectorAll('.hwseg:not(.lead)').forEach((el,i)=>el.classList.toggle('past',i<idx));
@@ -3073,7 +3181,7 @@ function frame(){
       callout.classList.toggle('hot', isHot && remain<=10);
       callout.classList.remove('long');
       $('#ride').classList.toggle('edgehot', isHot && remain<=10);
-      setCountdown(isHot ? remain : null, next.race ? 'RACE' : nz.name.toUpperCase());
+      setCountdown(isHot ? remain : null, cueName(next));
     } else {
       callout.classList.remove('hot');
       callout.classList.add('long');
@@ -3098,13 +3206,14 @@ function frame(){
     setSpectrum(false);
     card.style.background = lead.color; card.style.color = lead.ink; setZoneVars(0);
     card.classList.remove('fire','tunnel');
+    $('#ride').classList.remove('fire','tunnel','race');
     setZoneName('Get ready'); setText('zoneLabel','First up: '+(first.race?'Race':fz.name));
     setText('timer', fmtDown(-p));
     $('#ride').style.setProperty('--zone-next',fz.color);
     callout.querySelector('.sw').style.background = fz.color; callout.classList.remove('hot','long');
     $('#ride').classList.remove('edgehot');
     const preWindow = first.race ? 30 : 10;
-    setCountdown(-p<=preWindow ? -p : null, first.race ? 'RACE' : fz.name.toUpperCase());
+    setCountdown(-p<=preWindow ? -p : null, cueName(first));
     setText('calloutText','Next: '+(first.race?'Race':fz.name)+' in '+fmtDown(-p));
     hwInner.style.transform = 'translateX('+(nowX-(plan.off+p)*pps)+'px)';
     const tsub2 = $('#timerSub'), tsubBar2 = $('#timerSubBar');
@@ -3375,7 +3484,7 @@ function exitRide(){
   if(mashupAudio) mashupAudio.pause();
   MashupSaver.hide();
   $('#ride').hidden = true;
-  $('#ride').classList.remove('edgehot');
+  $('#ride').classList.remove('edgehot','fire','tunnel','race');
   const cameFromLibrary = activeOrigin==='library';
   const riddenList = activeList;
   activeList = null;
