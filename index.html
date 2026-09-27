@@ -248,24 +248,21 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .chip.on{background:#eef1f6;color:#0f131a;border-color:#eef1f6}
 .chip .dot{width:11px;height:11px;border-radius:3px;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.25) inset}
 .chip.on .dot{box-shadow:0 0 0 1px rgba(0,0,0,.35) inset,0 0 8px -1px currentColor}
-/* interval work/rest sliders */
-.wr{display:flex;flex-direction:column;gap:9px;background:#0f141c;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
-.wrrow{display:grid;grid-template-columns:52px minmax(0,1fr) 54px;align-items:center;gap:10px}
-.wrrow .k{font-size:13px;font-weight:700;color:var(--muted)}
-.wrrow b{font-variant-numeric:tabular-nums;font-size:15px;text-align:right}
-.wr input[type=range]{width:100%;-webkit-appearance:none;appearance:none;background:transparent;padding:0;border:0;height:22px;cursor:pointer}
-.wr input[type=range]::-webkit-slider-runnable-track{height:6px;border-radius:3px;background:#2b3344}
-.wr input[type=range]::-moz-range-track{height:6px;border-radius:3px;background:#2b3344}
-.wr input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-6px;border-radius:50%;background:#eef1f6;box-shadow:0 1px 6px rgba(0,0,0,.5)}
-.wr input[type=range]::-moz-range-thumb{width:18px;height:18px;border:0;border-radius:50%;background:#eef1f6;box-shadow:0 1px 6px rgba(0,0,0,.5)}
-.wr #fWork::-webkit-slider-thumb{background:var(--z4)}
-.wr #fWork::-moz-range-thumb{background:var(--z4)}
-.wr #fRest::-webkit-slider-thumb{background:var(--z1)}
-.wr #fRest::-moz-range-thumb{background:var(--z1)}
-.wrbar{display:flex;height:10px;border-radius:5px;overflow:hidden;background:#0c1017}
-.wrbar i{display:block;transition:flex-grow .18s var(--ease)}
-.wrbar .w{background:var(--z4)}
-.wrbar .r{background:var(--z1)}
+/* interval work/rest — stepper fields + real interval boxes */
+.wr{display:flex;flex-direction:column;gap:11px;background:#0f141c;border:1px solid var(--line);border-radius:12px;padding:12px 14px}
+.wrfields{display:flex;gap:14px;flex-wrap:wrap}
+.wrfield{display:flex;align-items:center;gap:10px}
+.wrfield .k{font-size:13px;font-weight:700;color:var(--muted);min-width:34px}
+.stepper{display:flex;align-items:center;gap:0;background:#161d29;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stepbtn{width:32px;height:32px;border:0;background:transparent;color:var(--text);font-size:17px;font-weight:700;cursor:pointer;line-height:1}
+.stepbtn:hover{background:#232c3b}
+.stepper input[type=number]{width:52px;height:32px;border:0;border-left:1px solid var(--line);border-right:1px solid var(--line);background:transparent;color:var(--text);font-variant-numeric:tabular-nums;font-size:15px;text-align:center;-moz-appearance:textfield}
+.stepper input[type=number]::-webkit-inner-spin-button,.stepper input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.wrboxes{display:flex;gap:4px;height:26px}
+.wrboxes .wrbox{border-radius:5px;min-width:6px;transition:flex-grow .18s var(--ease)}
+.wrboxes .wrbox.work{background:var(--z4)}
+.wrboxes .wrbox.rest{background:var(--z1)}
+.wrboxes .wrbox.other{background:#2b3344}
 .wrnote{font-size:12.5px;color:var(--muted)}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#eef1f6;color:#0f131a;padding:10px 16px;border-radius:10px;font-weight:700;z-index:50;max-width:90vw;box-shadow:0 12px 30px rgba(0,0,0,.4)}
 
@@ -783,9 +780,25 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       <div id="lWork" class="span2">
         <span class="flab">Interval work and rest</span>
         <div class="wr">
-          <div class="wrrow"><span class="k">Work</span><input id="fWork" type="range" min="10" max="180" step="5" aria-label="Work seconds"><b id="fWorkV">45s</b></div>
-          <div class="wrrow"><span class="k">Rest</span><input id="fRest" type="range" min="10" max="180" step="5" aria-label="Rest seconds"><b id="fRestV">30s</b></div>
-          <div class="wrbar"><i class="w" id="wrW"></i><i class="r" id="wrR"></i></div>
+          <div class="wrfields">
+            <div class="wrfield">
+              <span class="k">Work</span>
+              <div class="stepper">
+                <button type="button" class="stepbtn" id="wrWorkDown" aria-label="Decrease work seconds">−</button>
+                <input id="fWork" type="number" min="10" max="180" step="5" value="45" aria-label="Work seconds">
+                <button type="button" class="stepbtn" id="wrWorkUp" aria-label="Increase work seconds">+</button>
+              </div>
+            </div>
+            <div class="wrfield">
+              <span class="k">Rest</span>
+              <div class="stepper">
+                <button type="button" class="stepbtn" id="wrRestDown" aria-label="Decrease rest seconds">−</button>
+                <input id="fRest" type="number" min="10" max="180" step="5" value="30" aria-label="Rest seconds">
+                <button type="button" class="stepbtn" id="wrRestUp" aria-label="Increase rest seconds">+</button>
+              </div>
+            </div>
+          </div>
+          <div class="wrboxes" id="wrBoxes"></div>
           <div class="wrnote" id="wrNote"></div>
         </div>
       </div>
@@ -2572,12 +2585,27 @@ let wrTouched = false;
 function wrDefaults(){ return GOALS[$('#fGoal').value] || GOALS.balanced; }
 function syncWR(){
   const w = +$('#fWork').value, r = +$('#fRest').value;
-  $('#fWorkV').textContent = w+'s'; $('#fRestV').textContent = r+'s';
-  $('#wrW').style.flexGrow = String(w); $('#wrR').style.flexGrow = String(r);
   const ratio = r ? (w/r) : 0;
   $('#wrNote').textContent = w+' on, '+r+' off — '+
     (ratio>=1.6 ? 'long efforts, short recovery.' : ratio<=0.7 ? 'short efforts, generous recovery.' : 'even work and rest.')+
     ' Steps still snap to the nearest musical phrase.';
+}
+// Real interval boxes: one box per plan segment (Warm up / Interval N / Recover / Cool down /
+// Finisher), sized by its actual duration — not a generic two-color work/rest bar.
+function renderWRBoxes(plan){
+  const box = $('#wrBoxes'); if(!box) return;
+  box.innerHTML = (plan.segs||[]).map(s=>{
+    const dur = Math.max(0,s.end-s.start);
+    const cls = /^(interval|finisher)/i.test(s.label||'') ? 'work' : /^recover/i.test(s.label||'') ? 'rest' : 'other';
+    return '<i class="wrbox '+cls+'" style="flex-grow:'+Math.max(dur,1)+'" title="'+(s.label||'')+' · '+fmt(dur)+'"></i>';
+  }).join('');
+}
+function stepWR(which,dir){
+  const id = which==='work' ? '#fWork' : '#fRest', el = $(id);
+  const step = +el.step||5, min = +el.min||10, max = +el.max||180;
+  el.value = clamp(Math.round((+el.value||min)+dir*step),min,max);
+  wrTouched = true;
+  if(dT) syncDialog(); else syncWR();
 }
 function dialogState(){
   const style = $('#fStyle').value, goal = $('#fGoal').value;
@@ -2682,6 +2710,7 @@ function syncDialog(){
   renderFStrip();
   $('#fResetCustom').hidden = o.style!=='custom';
   const plan = buildPlan(temp,o);
+  if(o.style==='interval') renderWRBoxes(plan);
   const e = effort(plan.segs);
   if(!dT.offsetManual) $('#fOff').value = Math.round(plan.off);
   $('#offNote').textContent = dT.offsetManual ? 'Set by you.' : (plan.off>0 ? 'Chosen automatically for a time trial.' : 'Automatic.');
@@ -2995,6 +3024,10 @@ function openDialog(t){
 ['fWork','fRest'].forEach(id=>{
   $('#'+id).addEventListener('input',()=>{ wrTouched = true; if(dT) syncDialog(); else syncWR(); });
 });
+$('#wrWorkDown').onclick = ()=>stepWR('work',-1);
+$('#wrWorkUp').onclick = ()=>stepWR('work',1);
+$('#wrRestDown').onclick = ()=>stepWR('rest',-1);
+$('#wrRestUp').onclick = ()=>stepWR('rest',1);
 $('#fOff').addEventListener('input',()=>{ if(dT) dT.offsetManual = true; });
 $('#fTap').onclick = ()=>{
   const now = performance.now();
