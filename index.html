@@ -2180,7 +2180,10 @@ function renderTracks(){
       ? '<span class="short">'+fmt(gap)+' short of '+store.classLen+' min</span>'
       : '<span class="ok">covers '+store.classLen+' min</span>');
   }
-  $('#btnStart').disabled = !ts.length; $('#btnQuickClass').disabled = !ts.length; $('#btnRank').disabled = ts.length<2; $('#btnArc').disabled = ts.length<3;
+  // Quick build class works from an empty playlist too — it's what actually builds one —
+  // so it never sits disabled the way the other list-editing actions do until there's
+  // something to act on.
+  $('#btnStart').disabled = !ts.length; $('#btnRank').disabled = ts.length<2; $('#btnArc').disabled = ts.length<3;
   if(recsOpen) showRecs();   // suggestions track the class as it changes
 }
 const byUid = uid => tracks().find(t=>t.uid===+uid);
@@ -2486,17 +2489,27 @@ async function youtubeDiscoverySearch(q, have){
   const vids = (await apiVideos(ids.slice(0,3))).filter(v=>!v.dur || v.dur<=720);
   return vids[0] || null;
 }
-async function youtubeDiscovery(ts, want, exclude){
+// Every distinct YouTube song used in ANY saved playlist — not just the class currently being
+// built. Used as a broader seed pool for discovery (below) so "more from this artist"/"live
+// version" searches can draw on Ian's whole history from the very first song of a from-scratch
+// build, not just whatever's already been added to this particular class.
+function historySeedTracks(){
+  return Object.values(youtubeUsageIndex()).map(e=>({kind:'youtube', id:e.id, title:e.title, channel:e.channel}));
+}
+async function youtubeDiscovery(ts, want, exclude, seedExtra){
   if(!store.apiKey || !want) return [];
   const have = new Set(ts.map(t=>t.id).concat(exclude||[]));
-  const queries = [];
+  const seedPool = seedExtra && seedExtra.length ? ts.concat(seedExtra) : ts;
+  const seen = new Set(), queries = [];
   // Most-recently-added songs first, so which ones get a "live version" pick varies as the
   // class changes rather than always being the same song.
-  ts.filter(t=>t.kind==='youtube' && t.title).slice(-4).reverse().forEach(t=>{
-    queries.push({q:t.title+' live', reason:'a live version of a song already in the class'});
+  seedPool.filter(t=>t.kind==='youtube' && t.title).slice(-8).reverse().forEach(t=>{
+    const q = t.title+' live'; if(seen.has(q)) return; seen.add(q);
+    queries.push({q, reason:'a live version of a song you\'ve played before'});
   });
-  classArtists(ts).slice(0,4).forEach(a=>{
-    queries.push({q:a+' song', reason:'more from '+a});
+  classArtists(seedPool).slice(0,6).forEach(a=>{
+    const q = a+' song'; if(seen.has(q)) return; seen.add(q);
+    queries.push({q, reason:'more from '+a});
   });
   if(!queries.length) return [];
   const picks = queries.sort(()=>Math.random()-0.5);
@@ -2582,9 +2595,13 @@ function resetPinnedToAuto(){
 async function buildClassFromScratch(){
   const target = quickBuildTargetSec();
   const catalog = await loadMashupCatalog().catch(()=>[]);
+  // Seeded once from Ian's WHOLE history (every saved playlist), not just what's been added
+  // to this class so far — so "similar artist"/"live version" discovery has something to
+  // work from even on the very first pick of a brand-new class.
+  const historySeed = historySeedTracks();
   const list = [];
-  let total = 0, mashupsUsed = 0;
-  const maxMashups = 2;
+  let total = 0, mashupsUsed = 0, historyUsed = 0;
+  const maxMashups = 2, maxHistoryRepeats = 2;
   for(let guard=0; guard<60 && total<target; guard++){
     let picked = null;
     const wantMashup = mashupsUsed<maxMashups && catalog.length && list.length>0 && (list.length%5===4);
@@ -2594,9 +2611,17 @@ async function buildClassFromScratch(){
     }
     if(!picked){
       const have = list.map(t=>t.id).filter(Boolean);
-      let one = recommendYouTubeFromHistory(list,1)[0];
-      try{ if(!one) one = (await youtubeDiscovery(list,1,have))[0]; }catch(e){}
-      if(!one){ try{ one = (await youtubeSuggestions(store.theme,list,1,have))[0]; }catch(e){} }
+      // Discovery first (other songs by an artist already ridden to, or live versions of
+      // songs already played), then a generic search — a straight repeat of a song already
+      // used in a saved playlist is the last resort, and capped at 2 for the whole class,
+      // per Ian: "only pick 1 or 2 songs that has already been used in playlists."
+      let one = null;
+      try{ one = (await youtubeDiscovery(list, 1, have, historySeed))[0]; }catch(e){}
+      if(!one){ try{ one = (await youtubeSuggestions(store.theme, list, 1, have))[0]; }catch(e){} }
+      if(!one && historyUsed<maxHistoryRepeats){
+        const rep = recommendYouTubeFromHistory(list,1)[0];
+        if(rep){ one = rep; historyUsed++; }
+      }
       if(one) picked = {kind:'youtube', meta:one.yt};
     }
     if(!picked) break; // genuinely nothing left to add (no key, no history, no catalog)
