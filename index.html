@@ -167,9 +167,9 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 #totals .ok{color:#7fd6a2}
 .bpmbox.guess{border-style:dashed;border-color:#8a7a3a}
 .bpmbox input{width:56px;padding:3px 4px;border:0;background:transparent;font-weight:700;font-variant-numeric:tabular-nums}
-.strip{display:flex;height:16px;gap:1px;border-radius:5px;overflow:hidden;background:#0c1017;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
+.strip{display:flex;height:16px;gap:3px;border-radius:5px;overflow:hidden;background:#0c1017;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
 .strip.big{height:30px;margin:14px 0 8px}
-.strip i{display:block;min-width:2px;filter:saturate(1.08)}
+.strip i{display:block;min-width:2px;filter:saturate(1.08);border-radius:3px}
 .strip i.segclick{cursor:pointer;transition:filter .1s,outline-color .1s}
 .strip i.segclick:hover{filter:saturate(1.08) brightness(1.18);outline:2px solid rgba(255,255,255,.65);outline-offset:-2px}
 /* Item 27 (redone per Ian): no separate dialog — the bar itself, right in Remix it, is the
@@ -194,6 +194,8 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 #fMediaControls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
 .fsblock{position:absolute;top:0;bottom:0;cursor:pointer;filter:saturate(1.08);transition:filter .1s;overflow:hidden;display:flex;align-items:flex-end;justify-content:center;padding-bottom:4px;border-radius:2px}
 .fsblock:hover{filter:saturate(1.08) brightness(1.15)}
+.fsblock.effect-fire{background:repeating-linear-gradient(45deg,#ff3b3b,#ff3b3b 4px,#ff9d1f 4px,#ff9d1f 8px)}
+.fsblock.effect-tunnel{background:repeating-linear-gradient(90deg,#ff3b3b,#ff3b3b 3px,#8a0000 3px,#8a0000 6px)}
 .fsblock span{font-size:11px;font-weight:700;color:rgba(0,0,0,.55);text-shadow:0 1px 0 rgba(255,255,255,.2);pointer-events:none;white-space:nowrap}
 .fshandle{position:absolute;top:-6px;bottom:-6px;width:14px;margin-left:-7px;cursor:ew-resize;z-index:2;display:flex;align-items:center;justify-content:center}
 .fshandle::before{content:"";position:absolute;top:6px;bottom:6px;left:6px;width:2px;background:rgba(255,255,255,.55);border-radius:2px;box-shadow:0 0 4px rgba(0,0,0,.6)}
@@ -270,6 +272,9 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 /* ---------- Ride view ---------- */
 /* ---------- Start Class (library) view ---------- */
 #library{max-width:1220px;margin:0 auto;padding:28px 24px 80px}
+.plsearch{display:block;width:100%;max-width:480px;margin:0 0 18px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:15px}
+.plsearch::placeholder{color:var(--muted)}
+#plNoMatch{color:var(--muted);padding:20px 0}
 #plList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
 .plcard{background:var(--card-grad);border:1px solid var(--card-border);border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow-sm);transition:transform .18s var(--ease),border-color .18s}
 .plcard:hover{transform:translateY(-2px);border-color:#3a4560}
@@ -336,7 +341,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .tabs .btn{padding:7px 14px;font-size:14px;border:0;background:transparent;color:var(--muted);border-radius:8px;font-weight:600}
 .tabs .btn.primary{background:var(--panel2);color:var(--text);box-shadow:0 1px 0 rgba(255,255,255,.03) inset}
 .tabs .btn:hover{color:var(--text)}
-#panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:clamp(6px,1.1vh,14px);padding:clamp(12px,1.8vh,20px) clamp(14px,1.3vw,22px);background:linear-gradient(180deg,#171d29,#12161f);border-left:1px solid var(--line);min-height:0;overflow:hidden;text-align:center}
+#panel{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:clamp(4px,0.8vh,10px);padding:clamp(8px,1.2vh,14px) clamp(10px,1vw,16px);background:linear-gradient(180deg,#171d29,#12161f);border-left:1px solid var(--line);min-height:0;overflow:hidden;text-align:center;transition:background-color .2s,color .2s}
 /* Ian: the panel can run taller than the available height on some screens, and the controls row
    (including "Full screen") used to just get clipped by #panel's own overflow:hidden with no way
    to reach it. #panelScroll takes the flexible space and scrolls on its own if it must; .controls
@@ -614,8 +619,10 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     </div>
     <p>Pick a saved playlist to ride. Build or edit playlists in Playlist Creator.</p>
   </header>
+  <input id="plSearch" type="search" placeholder="Search by date, theme, artist or song..." autocomplete="off" class="plsearch">
   <ol id="plList"></ol>
   <div id="plEmpty" hidden>No saved playlists yet. Build one in Playlist Creator, then hit Save playlist.</div>
+  <div id="plNoMatch" hidden>No saved playlists match "<span id="plNoMatchQ"></span>".</div>
 </section>
 
 <!-- ============ RIDE VIEW ============ -->
@@ -645,6 +652,31 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     </div>
   </div>
 </dialog>
+
+<dialog id="qpDlg">
+  <div class="newform">
+    <h3>Choose a workout type</h3>
+    <p class="note" id="qpSong"></p>
+    <div class="chips" id="qpChips"></div>
+    <div class="newacts">
+      <button type="button" class="btn" id="qpCancel">Keep cycling instead</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="plNameDlg">
+  <div class="newform">
+    <h3>Name this playlist</h3>
+    <p class="note">It saves automatically from here on — no need to hit Save.</p>
+    <label><span class="flab">Playlist name</span>
+      <input id="plNameInput" type="text" placeholder="Friday 6am spin" autocomplete="off"></label>
+    <div class="newacts">
+      <button type="button" class="btn" id="plNameSkip">Skip</button>
+      <button type="button" class="btn primary spectrum" id="plNameGo">Save</button>
+    </div>
+  </div>
+</dialog>
+
 
 <dialog id="statsDlg">
   <div class="newform statsform">
@@ -679,7 +711,6 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
          controls row scrolls if it has to — the controls themselves (Full screen included) stay
          pinned at the bottom of the panel, always visible. -->
     <div id="panelScroll">
-    <div id="zoneKey" aria-label="Color zone key"></div>
     <div class="np">
       <div class="nt" id="npTitle"></div>
       <div class="nm"><span id="npIdx"></span><span id="npClass"></span></div>
@@ -1089,7 +1120,10 @@ function buildPlan(t,o){
   // timing, style) stays exactly as the engine chose it. Keyed by this segs array's own
   // index, which is why it's applied last, after merging.
   if(o.colorOverrides) for(const k in o.colorOverrides){
-    const seg = segs[+k]; if(seg) seg.z = clamp(+o.colorOverrides[k],0,4);
+    const seg = segs[+k]; if(!seg) continue;
+    const ov = o.colorOverrides[k];
+    if(ov==='fire' || ov==='tunnel'){ seg.z = 4; seg.effect = ov; seg.label = ov==='fire'?'Ring of fire':'Tunnel'; }
+    else { seg.z = clamp(+ov,0,4); if(seg.effect==='fire'||seg.effect==='tunnel') seg.effect = null; }
   }
   return {segs,D,off,unit:us,style,goal:o.goal||'balanced',N};
 }
@@ -1106,6 +1140,18 @@ function guessMeta(title,extra){
 }
 
 const ROTATION = ['interval','pyramid','climb','timetrial','race'];
+// One-tap plan's fixed cycle — every click on a song moves to the next entry, wrapping
+// around. Deliberately spans the full range, cool-down included, so a song sitting in the
+// class's cooldown slot can still become anything the instructor wants with repeated taps.
+const ONE_TAP_CYCLE = [
+  {style:'recover',   goal:'cooldown'},
+  {style:'timetrial', goal:'endurance'},
+  {style:'climb',     goal:'balanced'},
+  {style:'pyramid',   goal:'balanced'},
+  {style:'interval',  goal:'high'},
+  {style:'race',      goal:'high'}
+];
+const QUICK_STYLE_GOALS = Object.fromEntries(ONE_TAP_CYCLE.map(p=>[p.style,p.goal]));
 function quickPick(t,goal,bump){
   const g = goal || 'balanced';
   let style;
@@ -1553,7 +1599,26 @@ function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; 
 // absolute seconds — {z, frac} blocks (frac = share of total duration) so it can be reapplied
 // to a song of a different length and still land at proportionally the same points.
 const store = {tracks:[], apiKey:'', keyOK:false, countUp:false, look:90, playlists:[], currentId:null, classLen:45, theme:'', timingPresets:[]};
-function save(){ try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){} }
+let autoSavePlT = 0;
+function save(){
+  try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
+  // Ian: "I'd prefer playlists to automatically save everything there is a change instead
+  // of manually saving it every time... I have a feeling we'll forget to save and it'll all
+  // go away." Whenever a named playlist is open (store.currentId set), keep its saved copy
+  // in sync with the live draft automatically. Debounced so a burst of edits (drag-reorder,
+  // typing in a field) doesn't spam localStorage/Supabase with a write per keystroke.
+  if(store.currentId){
+    clearTimeout(autoSavePlT);
+    autoSavePlT = setTimeout(()=>{
+      const p = store.playlists.find(x=>x.id===store.currentId); if(!p) return;
+      const snap = JSON.stringify(store.tracks);
+      if(snap === JSON.stringify(p.tracks)) return; // nothing actually changed
+      p.tracks = JSON.parse(snap); p.updatedAt = Date.now();
+      try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
+      cloudPushPlaylist(p);
+    }, 700);
+  }
+}
 function loadStore(){
   try{
     const s = JSON.parse(localStorage.getItem('spinwidget:v1')||'null');
@@ -1581,6 +1646,7 @@ function makeTrack(m){
     bpm:g.bpm, bpmSrc:g.bpmSrc, genre:g.genre, offset:0, opts:null, plan:null, durKnown: !!m.dur};
   const o = quickPick(t,'balanced',0);
   t.opts = o; t.plan = buildPlan(t,o);
+  applySavedTimingIfAny(t);
   return t;
 }
 function makeMashupTrack(entry){
@@ -1593,6 +1659,7 @@ function makeMashupTrack(entry){
     mashupEntry:entry};
   const o = quickPick(t,'balanced',0);
   t.opts = o; t.plan = buildPlan(t,o);
+  applySavedTimingIfAny(t);
   return t;
 }
 function addMashup(entry){
@@ -1678,6 +1745,41 @@ function catalogUsageCounts(){
     (pl.tracks||[]).forEach(t=>{ if(t.catalogId) counts[t.catalogId] = (counts[t.catalogId]||0)+1; });
   });
   return counts;
+}
+// Same idea, for YouTube songs: how many saved playlists each video id has actually
+// appeared in, plus the metadata needed to recommend it again (title/thumb/dur/etc.) without
+// a fresh YouTube lookup. Ian: recommendations should be "individual songs from YouTube...
+// based on what we've played in the past in other playlists" — this is that history. A
+// duration cap (12 min) guards against ever recommending a long mix/set that slipped in.
+function youtubeUsageIndex(){
+  const idx = {};
+  (store.playlists||[]).forEach(pl=>{
+    (pl.tracks||[]).forEach(t=>{
+      if(t.kind!=='youtube' || !t.id) return;
+      if(t.dur && t.dur>720) return; // treat anything over 12 min as a mix/set, not a song
+      if(!idx[t.id]) idx[t.id] = {id:t.id, title:t.title, channel:t.channel, dur:t.dur, thumb:t.thumb, genre:t.genre, bpm:t.bpm, count:0};
+      idx[t.id].count++;
+    });
+  });
+  return idx;
+}
+// Recommend the YouTube songs Ian has actually used before, that fit the class's current
+// energy gap — the favorite/hardest/build/gentlest shape mirrors recommendSongs() below so
+// both sources read the same way, just over a different pool (his own YouTube history
+// instead of the mashup catalog). Falls back to a live YouTube search only to top up when
+// history alone can't fill the ask (e.g. a brand-new class with nothing saved yet).
+function recommendYouTubeFromHistory(ts, want){
+  const have = new Set(ts.map(t=>t.id).filter(Boolean));
+  const idx = youtubeUsageIndex();
+  let pool = Object.values(idx).filter(e=>!have.has(e.id)).map(e=>({e, en:songEnergy(e), uc:e.count}));
+  if(!pool.length) return [];
+  const cur = ts.map(songEnergy);
+  const mid = cur.length ? cur.reduce((a,b)=>a+b,0)/cur.length : 0.6;
+  pool.sort((a,b)=>b.uc-a.uc || (Math.abs(a.en-mid)-Math.abs(b.en-mid)));
+  return pool.slice(0,want).map(p=>({
+    yt:{id:p.e.id, title:p.e.title, channel:p.e.channel, dur:p.e.dur, thumb:p.e.thumb},
+    reason: p.uc>=2 ? 'a favorite — you\'ve used this in '+p.uc+' of your playlists' : 'you\'ve ridden to this before'
+  }));
 }
 function recommendSongs(catalog, ts, gapSec){
   const have = new Set(ts.map(t=>t.catalogId).filter(Boolean));
@@ -1819,6 +1921,60 @@ async function apiVideos(ids){
     extra:(v.snippet.description||'').slice(0,600)+' '+(v.snippet.tags||[]).join(' ')
   }));
 }
+// videos.list only accepts 50 ids per call — chunk larger playlists.
+async function apiVideosChunked(ids){
+  const out = [];
+  for(let i=0;i<ids.length;i+=50) out.push(...await apiVideos(ids.slice(i,i+50)));
+  return out;
+}
+function ytPlaylistId(s){
+  const m = String(s).match(/[?&]list=([\w-]+)/);
+  return m ? m[1] : null;
+}
+// Ian: "copy the link of the YouTube playlist and everything will load into the widget."
+// playlistItems.list is paginated at 50/page; capped at 10 pages (500 songs) as a sane ceiling.
+async function fetchPlaylistVideoIds(ytPlId){
+  const ids = []; let pageToken = '';
+  for(let page=0; page<10; page++){
+    const u = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
+    const params = {part:'contentDetails',maxResults:'50',playlistId:ytPlId,key:store.apiKey};
+    if(pageToken) params.pageToken = pageToken;
+    u.search = new URLSearchParams(params).toString();
+    const r = await fetch(u); const j = await r.json();
+    if(!r.ok) throw new Error((j.error&&j.error.message)||'Could not read that playlist');
+    (j.items||[]).forEach(it=>{ const vid = it.contentDetails && it.contentDetails.videoId; if(vid) ids.push(vid); });
+    if(!j.nextPageToken) break;
+    pageToken = j.nextPageToken;
+  }
+  return ids;
+}
+async function fetchPlaylistTitle(ytPlId){
+  try{
+    const u = new URL('https://www.googleapis.com/youtube/v3/playlists');
+    u.search = new URLSearchParams({part:'snippet',id:ytPlId,key:store.apiKey}).toString();
+    const r = await fetch(u); const j = await r.json();
+    return (j.items && j.items[0] && j.items[0].snippet && j.items[0].snippet.title) || '';
+  }catch(e){ return ''; }
+}
+async function importYouTubePlaylist(ytPlId){
+  if(!store.apiKey){ toast('Importing a playlist needs a YouTube API key. Open "Search setup".'); setupForced = true; syncSetupVis(); $('#settings').open = true; return; }
+  toast('Loading playlist…');
+  try{
+    const [ids, plTitle] = await Promise.all([fetchPlaylistVideoIds(ytPlId), fetchPlaylistTitle(ytPlId)]);
+    if(!ids.length){ toast('That playlist looks empty or private.'); return; }
+    const metas = await apiVideosChunked(ids);
+    if(!metas.length){ toast('Could not read any videos from that playlist.'); return; }
+    const hadPlaylistOpen = !!store.currentId;
+    metas.forEach(m=>{ store.tracks.push(makeTrack(m)); });
+    autoPlanClass(store.tracks); save(); renderTracks();
+    toast('Added '+metas.length+' song'+(metas.length===1?'':'s')+' from the playlist.');
+    // A brand-new import (nothing named yet) gets a name popup; adding into a playlist
+    // that's already named just auto-saves silently from here (see save()).
+    if(!hadPlaylistOpen) openNamePlaylistDialog(plTitle);
+  }catch(e){
+    toast('Could not import that playlist: '+(e.message||'try again'));
+  }
+}
 let findMode = 'youtube';
 function setFindMode(mode){
   findMode = mode;
@@ -1919,7 +2075,8 @@ function addFromMeta(m){
 }
 async function addLink(){
   const raw = $('#link').value.trim(); if(!raw) return;
-  if(/[?&]list=/.test(raw) && !/[?&]v=/.test(raw)){ toast('Playlist links are not supported yet. Add songs one at a time.'); return; }
+  const ytPlId = ytPlaylistId(raw);
+  if(ytPlId && !/[?&]v=/.test(raw)){ $('#link').value = ''; return void importYouTubePlaylist(ytPlId); }
   const id = ytId(raw); if(!id){ toast('That does not look like a YouTube link.'); return; }
   $('#link').value = '';
   try{
@@ -2006,7 +2163,26 @@ $('#tracks').addEventListener('click',e=>{
   // thing" — the separate "Back to auto" button (t.manual=false + autoPlanClass) is gone;
   // One-tap plan alone re-rolls the song onto a fresh automatic plan, which covers getting
   // back to automatic too.
-  if(act==='quick'){ t.qb = (t.qb||0)+1; t.opts = quickPick(t,t.opts.goal||'balanced',t.qb>1?1:0); t.manual = true; rebuild(t); }
+  // Bug fix (Ian, 2026-09-27): the old version reused t.opts.goal, which for a song sitting
+  // in the class's last slot is always 'cooldown' (goalForPosition always lands the class
+  // soft) — and quickPick(g==='cooldown') always returns 'recover' no matter what, so
+  // clicking One-tap plan on that song did visibly nothing, forever. One-tap plan now cycles
+  // through a real, fixed sequence of style+goal combos — including recover — so it changes
+  // something every single click, on ANY song, regardless of its position in the class.
+  if(act==='quick'){
+    t.qb = (t.qb||0)+1;
+    // Ian: after a few blind clicks, let him just pick the type directly instead of
+    // guessing where the cycle landed — every 3rd click opens a picker instead of advancing.
+    if(t.qb % 3 === 0){ openQuickPicker(t); save(); renderTracks(); return; }
+    const pick = ONE_TAP_CYCLE[t.qb % ONE_TAP_CYCLE.length];
+    let o = {style:pick.style, goal:pick.goal};
+    if(o.style==='interval'){
+      const shapes = INTERVAL_SHAPES[o.goal] || INTERVAL_SHAPES.balanced;
+      const [w,r] = shapes[t.qb % shapes.length];
+      o.workSec = w; o.restSec = r;
+    }
+    t.opts = o; t.manual = true; rebuild(t);
+  }
   // Item 27 (redone per Ian): one button, not two — "Remix it" just opens the dialog on
   // whatever style the song already has. The bar inside is directly editable for every
   // style now, so there's no separate "force straight into Custom" entry point needed
@@ -2242,11 +2418,15 @@ function recsHeadline(ts){
     ? 'This class is '+fmt(gap)+' short of '+store.classLen+' min. These would help fill it.'+th
     : 'This class already covers '+store.classLen+' min — these would round it out.'+th;
 }
-// Suggestions come from both sources: Ian's own catalogue (always available) and
-// YouTube (needs the Data API key, so it degrades quietly if that is not working).
-async function youtubeSuggestions(theme, ts, want){
+// Suggestions come from both sources, but Ian wants YouTube weighted first: "they should be
+// individual songs from YouTube (not 30 minute playlists or sets) and YouTube should be the
+// top recommendation over my mashups... based on what we've played in the past in other
+// playlists." History (recommendYouTubeFromHistory, above) is tried first; a live keyword
+// search only tops up the remainder, and both are capped to real songs (<=12 min) so a long
+// mix/set never gets suggested as if it were one track.
+async function youtubeSuggestions(theme, ts, want, exclude){
   if(!store.apiKey || !want) return [];
-  const have = new Set(ts.map(t=>t.id));
+  const have = new Set(ts.map(t=>t.id).concat(exclude||[]));
   const genres = ts.map(t=>t.genre).filter(Boolean);
   const topGenre = genres.sort((a,b)=>genres.filter(g=>g===b).length-genres.filter(g=>g===a).length)[0];
   const q = (theme || topGenre || 'workout') + ' music';
@@ -2256,7 +2436,7 @@ async function youtubeSuggestions(theme, ts, want){
   if(!r.ok) throw new Error((j.error&&j.error.message)||'YouTube search failed');
   const ids = (j.items||[]).map(i=>i.id.videoId).filter(Boolean).filter(id=>!have.has(id));
   if(!ids.length) return [];
-  const vids = await apiVideos(ids.slice(0,want*2));
+  const vids = (await apiVideos(ids.slice(0,want*3))).filter(v=>!v.dur || v.dur<=720); // no 30-min sets
   return vids.slice(0,want).map(v=>({yt:v, reason:theme ? 'matches “'+theme+'” on YouTube' : 'on YouTube, fits the class'}));
 }
 async function showRecs(){
@@ -2268,13 +2448,18 @@ async function showRecs(){
     const ts = tracks();
     const gap = classTargetSec()-totalDur(ts);
     const mash = recommendSongs(catalog, ts, gap);
-    // YouTube is a bonus, never a blocker: if the key is missing or the quota is spent,
-    // the mashup suggestions still stand on their own.
-    let yt = [];
-    try{ yt = await youtubeSuggestions(store.theme, ts, 3); }
-    catch(e){ yt = []; }
+    // YouTube first, per Ian: songs he's actually ridden to before, then a live search only
+    // tops up if history alone doesn't fill the ask. Never a blocker — a missing/expired key
+    // just means the mashup suggestions stand on their own, same as before.
+    let yt = recommendYouTubeFromHistory(ts, 3);
+    if(yt.length < 3){
+      try{
+        const more = await youtubeSuggestions(store.theme, ts, 3-yt.length, yt.map(r=>r.yt.id));
+        yt = yt.concat(more);
+      }catch(e){ /* live search is a bonus on top of history, fine to skip */ }
+    }
     if(!recsOpen) return;
-    lastRecs = mash.concat(yt);
+    lastRecs = yt.concat(mash);
     if(!lastRecs.length){ box.innerHTML = '<p class="note">Nothing left to suggest — every mashup in your library is already in this class.</p>'; return; }
     box.innerHTML = '<p class="note">'+esc(recsHeadline(ts))+'</p>' + lastRecs.map((r,i)=>{
       if(r.yt){
@@ -2350,6 +2535,14 @@ const onChip = ()=>{ if(dT) syncDialog(); };
 // itself. No separate typed-row editor, no separate dialog. Editing any non-Custom style's bar
 // freezes its current shape into customSegs and switches Style to Custom behind the scenes.
 let customSegs = [];
+// A hand-picked color (or Ring of fire / Tunnel) on ONE block of an otherwise-automatic
+// plan — set by clicking a block in the dialog's strip without dragging/splitting anything.
+// Ian: "I don't like how it says 'edited'/'Custom' when I make some slight change on the
+// color bar" — a click-only tweak like this must NOT switch the song into full Custom mode
+// (that's what fsEnsureCustom/customSegs is for), so it never earns the "(edited)" label.
+// Keyed by the plan's own segment index; value is a zone number 0-4, or 'fire'/'tunnel'.
+let fsColorOverrides = {};
+const COLOR_CYCLE = [0,1,2,3,4,'fire','tunnel'];
 function fsTotalSec(){ return customSegs.reduce((a,s)=>a+s.dur,0) || 1; }
 // Whatever style the song had when the Remix it dialog was opened — "Reset to automatic" goes
 // back to this, discarding customSegs, rather than to some arbitrary default.
@@ -2368,6 +2561,7 @@ function seedCustomSegsFromCurrentPlan(){
 }
 chipGroup($('#fStyle'),[['auto','Quick pick'],...Object.entries(STYLES)],v=>{
   if(v!=='custom') customSegs = []; // a non-custom style picked from the chips overrides any hand edit
+  fsColorOverrides = {}; // a deliberately picked style resets any per-block color tweak too
   onChip();
 });
 chipGroup($('#fGoal'),Object.entries(GOALS).map(([k,v])=>[k,v.label]),()=>{ wrTouched = false; onChip(); });
@@ -2391,6 +2585,7 @@ function dialogState(){
   let o = {style,goal,ttZone:$('#fTT').value,workSec:$('#fWork').value,restSec:$('#fRest').value};
   if(style==='auto') o = {...o,...quickPick(temp,goal,0)};
   if(style==='custom'){ o.customSegs = customSegs; o.customBase = customBase || null; }
+  else if(Object.keys(fsColorOverrides).length) o.colorOverrides = {...fsColorOverrides};
   return {temp,o};
 }
 // Renders #fStrip as the one editable bar — every style, not just Custom. When the style is
@@ -2405,8 +2600,8 @@ function renderFStrip(){
   } else {
     const plan = buildPlan(temp,o);
     blocks = [];
-    if(plan.off>0) blocks.push({z:0,dur:plan.off});
-    plan.segs.forEach(s=>blocks.push({z:s.z,dur:Math.max(1,s.end-s.start)}));
+    if(plan.off>0) blocks.push({z:0,dur:plan.off,effect:null});
+    plan.segs.forEach(s=>blocks.push({z:s.z,dur:Math.max(1,s.end-s.start),effect:s.effect||null}));
   }
   const total = blocks.reduce((a,s)=>a+s.dur,0) || 1, strip = $('#fStrip');
   let acc = 0, html = '';
@@ -2416,7 +2611,10 @@ function renderFStrip(){
     // The "+" (add a step here) sits on every block, always visible — not just on double-click —
     // so adding is just as discoverable as removing, in every style, not only once it's Custom.
     const addBtn = widthPct>=10 ? `<button type="button" class="fsaddbtn" data-add="${i}" title="Split this block into two steps">+</button>` : '';
-    html += `<div class="fsblock" data-idx="${i}" style="left:${leftPct}%;width:${widthPct}%;background:${ZONES[s.z].color}" title="${ZONES[s.z].name} — ${fmt(s.dur)}. Click to change color, double-click (or the + button) to split.">${addBtn}${widthPct>=6?`<span>${fmt(s.dur)}</span>`:''}</div>`;
+    const fx = s.effect==='fire'||s.effect==='tunnel';
+    const label = s.effect==='fire' ? 'Ring of fire' : (s.effect==='tunnel' ? 'Tunnel' : ZONES[s.z].name);
+    const bg = fx ? '' : `background:${ZONES[s.z].color}`;
+    html += `<div class="fsblock${fx?' effect-'+s.effect:''}" data-idx="${i}" style="left:${leftPct}%;width:${widthPct}%;${bg}" title="${label} — ${fmt(s.dur)}. Click to cycle color (White→Blue→Green→Yellow→Red→Ring of fire→Tunnel), double-click (or the + button) to split.">${addBtn}${widthPct>=6?`<span>${fmt(s.dur)}</span>`:''}</div>`;
   });
   acc = 0;
   for(let i=0;i<blocks.length-1;i++){
@@ -2507,8 +2705,24 @@ $('#fStrip').addEventListener('click',e=>{
     return;
   }
   const b = e.target.closest('.fsblock'); if(!b || b.dataset.dragged==='1') return;
-  const idx = +b.dataset.idx, segs = fsEnsureCustom();
-  segs[idx].z = (segs[idx].z+1)%ZONES.length;
+  const idx = +b.dataset.idx;
+  const {o} = dialogState();
+  if(o.style==='custom'){
+    // Already fully hand-timed — cycling a block's color here is just one more edit on
+    // top of edits already made, so it stays inside customSegs same as before.
+    const segs = fsEnsureCustom();
+    segs[idx].z = (segs[idx].z+1)%ZONES.length;
+  } else {
+    // A plain color click on an otherwise-automatic style: a small tweak that keeps the
+    // song's real style/timing/goal intact, cycling White→Blue→Green→Yellow→Red→Ring of
+    // fire→Tunnel. Deliberately does NOT call fsEnsureCustom — that's what would freeze it
+    // into full Custom and earn the "(edited)" label Ian didn't want for a tweak this small.
+    const plan = buildPlan(dialogState().temp, o);
+    const seg = plan.segs[idx]; if(!seg) return;
+    const cur = seg.effect || seg.z;
+    const pos = COLOR_CYCLE.indexOf(cur);
+    fsColorOverrides[idx] = COLOR_CYCLE[(pos<0?0:pos+1) % COLOR_CYCLE.length];
+  }
   syncDialog();
 });
 $('#fStrip').addEventListener('dblclick',e=>{
@@ -2566,16 +2780,43 @@ $('#fResetCustom').onclick = ()=>{
 // of the total duration) so a shape built on a 3:40 song can be dropped onto a 4:15 song and
 // still land proportionally in the same places. Lives in store.timingPresets (localStorage,
 // local to this browser — not the Supabase-backed playlist sync).
-function autoSaveTiming(title, segs){
+// ===== saved timing presets — reuse a hand-set shape across different songs, AND auto-load
+// on the same song ("if I've already created it... automatically load if it's tied to the
+// YouTube URL/ID or mashup, I don't want to load it manually, it'll get large and hard to
+// find") =====
+// Keyed by the track's own id (t.id — a YouTube video id, or 'mashup:<catalogId>' for a
+// mashup — both stable and already unique per makeTrack/makeMashupTrack) so it can be
+// recognized automatically the next time that exact song is added, and ALSO by name so it
+// can still be deliberately re-applied to a different song via the Load-saved-timing dropdown
+// (the original ask this feature shipped for). Stored as {z, frac} blocks (frac = share of
+// total duration) so a shape built on a 3:40 song can be dropped onto a 4:15 song and still
+// land proportionally in the same places. Lives in store.timingPresets (localStorage, local
+// to this browser — not the Supabase-backed playlist sync).
+function autoSaveTiming(id, title, segs){
   if(!segs.length) return;
   const total = segs.reduce((a,s)=>a+s.dur,0) || 1;
   const frac = segs.map(s=>({z:s.z, frac:s.dur/total}));
   // Re-saving the same song's timing just updates its existing entry in place, rather than
   // piling up duplicates every time that song gets tweaked and re-applied.
-  store.timingPresets = store.timingPresets.filter(p=>p.name!==title);
-  store.timingPresets.push({name:title, frac});
+  store.timingPresets = store.timingPresets.filter(p=>p.id!==id && p.name!==title);
+  store.timingPresets.push({id, name:title, frac});
   save();
   refreshTimingPresetList();
+}
+// Applies a saved shape to a freshly-made track object, in place — used right at creation
+// time (makeTrack/makeMashupTrack) so a song that's been hand-timed before comes in already
+// timed, with no dropdown to hunt through.
+function applySavedTimingIfAny(t){
+  const preset = (store.timingPresets||[]).find(p=>p.id===t.id);
+  if(!preset || !preset.frac.length) return false;
+  const total = t.dur || 210;
+  const segs = preset.frac.map(f=>({z:f.z, dur:Math.max(5,Math.round(f.frac*total))}));
+  const drift = total - segs.reduce((a,s)=>a+s.dur,0);
+  segs[segs.length-1].dur = Math.max(5, segs[segs.length-1].dur + drift);
+  t.opts = {style:'custom', goal:'balanced', customSegs:segs, customBase:t.opts && t.opts.style!=='custom' ? t.opts.style : null};
+  t.manual = true;
+  t.plan = buildPlan(t, t.opts);
+  return true;
 }
 function refreshTimingPresetList(){
   const sel = $('#fLoadTiming');
@@ -2727,6 +2968,7 @@ function openDialog(t){
   dT = t; dTapTimes = [];
   customSegs = (t.opts.style==='custom' && Array.isArray(t.opts.customSegs) && t.opts.customSegs.length)
     ? t.opts.customSegs.map(s=>({...s})) : [];
+  fsColorOverrides = (t.opts.style!=='custom' && t.opts.colorOverrides) ? {...t.opts.colorOverrides} : {};
   // "Reset to automatic" goes back to whatever style the song actually had when this song was
   // last built with a real style (not Custom) — falls back to Quick pick if it was already
   // Custom when the dialog opened, since there's no other style to remember in that case.
@@ -2769,7 +3011,7 @@ $('#fApply').onclick = ()=>{
   const {temp,o} = dialogState();
   if(+$('#fBpm').value !== dT.bpm) dT.bpmSrc = 'manual';
   if(!wrTouched){ delete o.workSec; delete o.restSec; }
-  if(o.style==='custom') autoSaveTiming(dT.title, o.customSegs||[]);
+  if(o.style==='custom') autoSaveTiming(dT.id, dT.title, o.customSegs||[]);
   dT.bpm = temp.bpm; dT.offset = temp.offset; dT.dur = temp.dur; dT.durKnown = true;
   dT.opts = o; dT.manual = true; rebuild(dT); dlg.close(); dT = null; save(); renderTracks();
 };
@@ -3149,7 +3391,7 @@ function frame(){
     const lbl = $('#classProgressLabel'); if(lbl) lbl.textContent = fmt(soFar)+' of '+fmt(total)+' — '+fmtDown(Math.max(0,total-soFar))+' left';
   }
 
-  const card = $('#zoneCard'), callout = $('#callout');
+  const card = $('#zoneCard'), callout = $('#callout'), panel = $('#panel');
   let idx = -1, curZoneKey = null;
   if(p>=0){ idx = segs.findIndex(s=>p>=s.start && p<s.end); if(idx<0) idx = segs.length-1; }
   if(idx>=0){
@@ -3158,7 +3400,11 @@ function frame(){
     const remain = Math.max(0,seg.end-p), elapsed = Math.max(0,p-seg.start);
     if(idx!==lastIdx){
       setSpectrum(!!seg.race);
+      // Ian: "the full side bar widget should be the color that we are actively in, instead
+      // of just a color box" — the panel itself now takes the zone color too, not just the
+      // small zonecard sitting inside it, so the whole sidebar reads as the current zone.
       card.style.background = seg.race ? '' : z.color; card.style.color = seg.race ? '' : z.ink; setZoneVars(seg.z);
+      panel.style.background = seg.race ? '' : z.color; panel.style.color = seg.race ? '' : z.ink;
       card.classList.toggle('fire', seg.effect==='fire');
       card.classList.toggle('tunnel', seg.effect==='tunnel');
       // Ian: "ring of fire should have animated fire around the big box" / "the tunnel wheel
@@ -3231,6 +3477,7 @@ function frame(){
       card.classList.remove('flash'); hwInner.querySelectorAll('.hwseg').forEach(el=>el.classList.remove('past')); }
     setSpectrum(false);
     card.style.background = lead.color; card.style.color = lead.ink; setZoneVars(0);
+    panel.style.background = lead.color; panel.style.color = lead.ink;
     card.classList.remove('fire','tunnel');
     $('#ride').classList.remove('fire','tunnel','race');
     setZoneName('Get ready'); setText('zoneLabel','First up: '+(first.race?'Race':fz.name));
@@ -3384,15 +3631,29 @@ function plFilmHTML(p){
   const more = rest>0 ? `<div class="more">+${rest} more</div>` : '';
   return `<div class="plfilm">${cells}${more}</div>`;
 }
+// Ian: "add a search bar so you can access previous playlists by date, theme, by an artist
+// or a song that is within the playlist." Matches the playlist's name, theme, saved date
+// (both the raw and the localized form, so "9/24" or "September" both work), and every
+// track's title/channel/mashup artist — whatever's easiest to remember about a class.
+function playlistSearchText(p){
+  const dateStr = new Date(p.updatedAt).toLocaleDateString();
+  const dateLong = new Date(p.updatedAt).toDateString();
+  const songBits = (p.tracks||[]).map(t=>[t.title,t.channel,t.mashupEntry&&t.mashupEntry.mashupArtist].filter(Boolean).join(' ')).join(' ');
+  return [p.name, p.theme, dateStr, dateLong, songBits].filter(Boolean).join(' ').toLowerCase();
+}
 function renderLibrary(){
-  const list = store.playlists.slice().sort((a,b)=>b.updatedAt-a.updatedAt);
-  $('#plEmpty').hidden = !!list.length;
+  const q = ($('#plSearch').value||'').trim().toLowerCase();
+  const all = store.playlists.slice().sort((a,b)=>b.updatedAt-a.updatedAt);
+  const list = q ? all.filter(p=>playlistSearchText(p).includes(q)) : all;
+  $('#plEmpty').hidden = !!all.length;
+  $('#plNoMatch').hidden = !(q && all.length && !list.length);
+  if($('#plNoMatch').hidden===false) $('#plNoMatchQ').textContent = ($('#plSearch').value||'').trim();
   $('#plList').innerHTML = list.map(p=>`
     <li class="plcard">
       <div class="plhead">
         <div>
           <h3>${esc(p.name)}</h3>
-          <div class="plmeta">${p.tracks.length} song${p.tracks.length===1?'':'s'} &middot; ${fmt(totalDur(p.tracks))} &middot; updated ${new Date(p.updatedAt).toLocaleDateString()}</div>
+          <div class="plmeta">${p.tracks.length} song${p.tracks.length===1?'':'s'} &middot; ${fmt(totalDur(p.tracks))} &middot; updated ${new Date(p.updatedAt).toLocaleDateString()}${p.theme?' &middot; '+esc(p.theme):''}</div>
         </div>
         <div class="plbtns">
           <button class="btn primary spectrum" data-start="${p.id}">Start class</button>
@@ -3403,6 +3664,7 @@ function renderLibrary(){
       ${plFilmHTML(p)}
     </li>`).join('');
 }
+$('#plSearch').addEventListener('input', renderLibrary);
 $('#plList').addEventListener('click', e=>{
   const b = e.target.closest('button'); if(!b) return;
   if(b.dataset.start) startSavedPlaylist(b.dataset.start);
@@ -3437,6 +3699,20 @@ function clearTheme(){
   save();
 }
 const clearThemeAfterSave = clearTheme; // kept as an alias — same function, save() is one of several callers now
+// Ian: "when I paste a playlist, a pop-up box should come up and ask what I'd like to name
+// the playlist and automatically save it." Only fires for a fresh import with no playlist
+// open yet — importing into an already-named playlist just auto-saves silently (see save()).
+function openNamePlaylistDialog(suggested){
+  $('#plNameInput').value = suggested || '';
+  $('#plNameDlg').showModal();
+}
+$('#plNameGo').onclick = ()=>{
+  const name = ($('#plNameInput').value||'').trim() || 'Imported playlist';
+  $('#plNameDlg').close();
+  $('#plName').value = name;
+  savePlaylist(); // names it and sets store.currentId — everything from here on auto-saves
+};
+$('#plNameSkip').onclick = ()=>{ $('#plNameDlg').close(); };
 function savePlaylist(){
   if(!store.tracks.length){ toast('Add some songs first.'); return; }
   const name = ($('#plName').value||'').trim() || 'Untitled playlist';
@@ -3444,9 +3720,9 @@ function savePlaylist(){
   const snapshot = JSON.parse(JSON.stringify(store.tracks)); // decouple from the live draft
   if(store.currentId){
     const p = store.playlists.find(x=>x.id===store.currentId);
-    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; clearThemeAfterSave(); save(); $('#plName').value = name; showSavedNote('Saved "'+name+'" at '+saveTimeStr()); showSavedBar(name); cloudPushPlaylist(p); return; }
+    if(p){ p.name = name; p.tracks = snapshot; p.updatedAt = now; if(store.theme) p.theme = store.theme; clearThemeAfterSave(); save(); $('#plName').value = name; showSavedNote('Saved "'+name+'" at '+saveTimeStr()); showSavedBar(name); cloudPushPlaylist(p); return; }
   }
-  const p = {id:plId(), name, tracks:snapshot, createdAt:now, updatedAt:now};
+  const p = {id:plId(), name, tracks:snapshot, createdAt:now, updatedAt:now, theme:store.theme||''};
   store.playlists.push(p); store.currentId = p.id; clearThemeAfterSave(); save(); $('#plName').value = name;
   showSavedNote('Saved "'+name+'" at '+saveTimeStr());
   showSavedBar(name);
@@ -3550,6 +3826,28 @@ function applyNewPlaylist(){
 }
 $('#nGo').onclick = ()=>{ $('#newDlg').close(); applyNewPlaylist(); };
 $('#nCancel').onclick = ()=>{ $('#newDlg').close(); };
+
+// ---------- one-tap plan's 3rd-click picker ----------
+// Ian: after a few blind One-tap-plan clicks, show a popup to pick the type directly.
+let qpTrackUid = null;
+function openQuickPicker(t){
+  qpTrackUid = t.uid;
+  $('#qpSong').textContent = t.title;
+  $('#qpChips').innerHTML = ONE_TAP_CYCLE.map(p=>
+    `<button type="button" class="chip${t.opts.style===p.style?' on':''}" data-style="${p.style}">${STYLES[p.style]}</button>`).join('');
+  $('#qpDlg').showModal();
+}
+$('#qpChips').addEventListener('click',e=>{
+  const b = e.target.closest('[data-style]'); if(!b) return;
+  const t = byUid(qpTrackUid); if(!t){ $('#qpDlg').close(); return; }
+  const style = b.dataset.style, goal = QUICK_STYLE_GOALS[style] || 'balanced';
+  let o = {style,goal};
+  if(style==='interval'){ const [w,r] = (INTERVAL_SHAPES[goal]||INTERVAL_SHAPES.balanced)[0]; o.workSec=w; o.restSec=r; }
+  t.opts = o; t.manual = true; t.qb = 0; rebuild(t);
+  save(); renderTracks();
+  $('#qpDlg').close();
+});
+$('#qpCancel').onclick = ()=>{ $('#qpDlg').close(); };
 function renderThemeChip(){
   const el = $('#themeChip'); if(!el) return;
   el.hidden = !store.theme;
