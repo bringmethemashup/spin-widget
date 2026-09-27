@@ -1726,6 +1726,25 @@ function arcOrder(list){
   return [...byEnergy, peak, cool];  // the rest ramp up in between
 }
 function classTargetSec(){ return clamp(+store.classLen||45,10,120)*60; }
+// Quick build class's own target: Ian runs late or early often enough that landing exactly
+// on the class length isn't the goal — he wants a cushion. "5 minutes (or more) than the
+// length of the class" so there's always something left to ride if class starts late or
+// runs long, rather than the music running out mid-cooldown.
+function quickBuildTargetSec(){ return classTargetSec() + 5*60; }
+
+// Distinct artists already in the class, used as "more from this artist" / "live version of
+// a song already in here" search seeds below. The channel name stands in for the artist —
+// most official YouTube channels are named for the artist (minus a trailing "- Topic").
+function classArtists(ts){
+  const seen = new Set(), out = [];
+  (ts||[]).forEach(t=>{
+    if(t.kind!=='youtube' || !t.channel) return;
+    const c = t.channel.replace(/\s*-\s*Topic$/i,'').trim();
+    if(!c || seen.has(c.toLowerCase())) return;
+    seen.add(c.toLowerCase()); out.push(c);
+  });
+  return out;
+}
 
 // ---------- song recommendations ----------
 // Helps fill out or end a playlist, from Ian's own catalog — no YouTube key needed, and the
@@ -2452,6 +2471,45 @@ async function youtubeSuggestions(theme, ts, want, exclude){
   const vids = (await apiVideos(ids.slice(0,want*3))).filter(v=>!v.dur || v.dur<=720); // no 30-min sets
   return vids.slice(0,want).map(v=>({yt:v, reason:theme ? 'matches “'+theme+'” on YouTube' : 'on YouTube, fits the class'}));
 }
+// Ian: recommendations shouldn't be mostly repeats of songs he's already ridden to before —
+// mix in real discovery too: other songs by an artist already in the class, and live
+// versions of songs already in it. Each is its own small live YouTube search (needs the
+// key), so one query failing (no results, quota, etc.) never blocks the others. Capped to
+// real songs (<=12 min) same as every other YouTube suggestion here.
+async function youtubeDiscoverySearch(q, have){
+  const u = new URL('https://www.googleapis.com/youtube/v3/search');
+  u.search = new URLSearchParams({part:'snippet',type:'video',maxResults:'5',q,videoEmbeddable:'true',key:store.apiKey}).toString();
+  const r = await fetch(u); const j = await r.json();
+  if(!r.ok) return null;
+  const ids = (j.items||[]).map(i=>i.id.videoId).filter(Boolean).filter(id=>!have.has(id));
+  if(!ids.length) return null;
+  const vids = (await apiVideos(ids.slice(0,3))).filter(v=>!v.dur || v.dur<=720);
+  return vids[0] || null;
+}
+async function youtubeDiscovery(ts, want, exclude){
+  if(!store.apiKey || !want) return [];
+  const have = new Set(ts.map(t=>t.id).concat(exclude||[]));
+  const queries = [];
+  // Most-recently-added songs first, so which ones get a "live version" pick varies as the
+  // class changes rather than always being the same song.
+  ts.filter(t=>t.kind==='youtube' && t.title).slice(-4).reverse().forEach(t=>{
+    queries.push({q:t.title+' live', reason:'a live version of a song already in the class'});
+  });
+  classArtists(ts).slice(0,4).forEach(a=>{
+    queries.push({q:a+' song', reason:'more from '+a});
+  });
+  if(!queries.length) return [];
+  const picks = queries.sort(()=>Math.random()-0.5);
+  const out = [];
+  for(const {q,reason} of picks){
+    if(out.length>=want) break;
+    try{
+      const v = await youtubeDiscoverySearch(q, have);
+      if(v){ out.push({yt:v, reason}); have.add(v.id); }
+    }catch(e){ /* one bad query shouldn't block the rest */ }
+  }
+  return out;
+}
 async function showRecs(){
   const box = $('#recs'); box.hidden = false;
   box.innerHTML = '<p class="note">Looking for songs that fit...</p>';
@@ -2460,14 +2518,21 @@ async function showRecs(){
     if(!recsOpen) return;
     const ts = tracks();
     const gap = classTargetSec()-totalDur(ts);
-    const mash = recommendSongs(catalog, ts, gap);
-    // YouTube first, per Ian: songs he's actually ridden to before, then a live search only
-    // tops up if history alone doesn't fill the ask. Never a blocker — a missing/expired key
-    // just means the mashup suggestions stand on their own, same as before.
-    let yt = recommendYouTubeFromHistory(ts, 3);
-    if(yt.length < 3){
+    // Mashups stay capped at 2 — Ian wants YouTube to be the majority of what's suggested,
+    // not just the top-ranked source.
+    const mash = recommendSongs(catalog, ts, gap).slice(0,2);
+    // YouTube: at most one straight repeat from history, then real discovery (other songs
+    // by an artist already in the class, live versions of songs already in it), then a
+    // generic theme/genre search only tops up whatever's still missing. Ian: "I don't want
+    // all recommendations to be repeats."
+    let yt = recommendYouTubeFromHistory(ts, 1);
+    try{
+      const disc = await youtubeDiscovery(ts, 3, yt.map(r=>r.yt.id));
+      yt = yt.concat(disc);
+    }catch(e){ /* discovery is a bonus, fine to skip */ }
+    if(yt.length < 4){
       try{
-        const more = await youtubeSuggestions(store.theme, ts, 3-yt.length, yt.map(r=>r.yt.id));
+        const more = await youtubeSuggestions(store.theme, ts, 4-yt.length, yt.map(r=>r.yt.id));
         yt = yt.concat(more);
       }catch(e){ /* live search is a bonus on top of history, fine to skip */ }
     }
@@ -2496,15 +2561,75 @@ $('#recs').addEventListener('click', e=>{
   b.textContent = 'Added'; b.disabled = true;
   if(r.yt) addFromMeta(r.yt); else addMashup(r.entry);   // re-plans and refreshes this panel
 });
-// The class already plans itself on every change, so this button's job is now the reset:
-// it takes back the songs the instructor pinned by hand and rebuilds everything.
-$('#btnQuickClass').onclick = ()=>{
+// The class already plans itself on every change, so when there's nothing to replace this
+// just resets whatever the instructor pinned by hand.
+function resetPinnedToAuto(){
   const ts = tracks();
   const pinned = ts.filter(t=>t.manual).length;
   autoPlanClass(ts,true);
   save(); renderTracks();
   toast(pinned ? 'Class rebuilt — '+pinned+(pinned===1?' custom song':' custom songs')+' reset to automatic.'
                : 'Class rebuilt: warm-up, build, peak, cool down.');
+}
+// Ian: "let 'quick build a class' be an actual feature... automatically create an entire
+// playlist including a warmup and cool down" for a stated class length, "mostly YouTube
+// videos and then 1-2x bringmethemashup songs," running 5+ minutes past the stated length
+// so a late start or a class that runs long never comes up short on music. Builds song by
+// song — mostly from live YouTube discovery/history, a mashup dropped in roughly every 5th
+// slot up to a cap of 2 — until the running total clears quickBuildTargetSec(), then hands
+// the whole thing to arcOrder()/autoPlanClass() for the actual warm-up/build/peak/cool-down
+// shape, exactly like every other planned class.
+async function buildClassFromScratch(){
+  const target = quickBuildTargetSec();
+  const catalog = await loadMashupCatalog().catch(()=>[]);
+  const list = [];
+  let total = 0, mashupsUsed = 0;
+  const maxMashups = 2;
+  for(let guard=0; guard<60 && total<target; guard++){
+    let picked = null;
+    const wantMashup = mashupsUsed<maxMashups && catalog.length && list.length>0 && (list.length%5===4);
+    if(wantMashup){
+      const cand = recommendSongs(catalog, list, target-total)[0];
+      if(cand) picked = {kind:'mashup', entry:cand.entry};
+    }
+    if(!picked){
+      const have = list.map(t=>t.id).filter(Boolean);
+      let one = recommendYouTubeFromHistory(list,1)[0];
+      try{ if(!one) one = (await youtubeDiscovery(list,1,have))[0]; }catch(e){}
+      if(!one){ try{ one = (await youtubeSuggestions(store.theme,list,1,have))[0]; }catch(e){} }
+      if(one) picked = {kind:'youtube', meta:one.yt};
+    }
+    if(!picked) break; // genuinely nothing left to add (no key, no history, no catalog)
+    const t = picked.kind==='mashup' ? makeMashupTrack(picked.entry) : makeTrack(picked.meta);
+    list.push(t);
+    if(picked.kind==='mashup') mashupsUsed++;
+    total += (t.dur||210);
+  }
+  if(!list.length) return null;
+  return {list: arcOrder(list), total, mashupsUsed};
+}
+$('#btnQuickClass').onclick = async ()=>{
+  const ts = tracks();
+  if(ts.length){
+    const replace = confirm('Build a brand-new ~'+Math.round(quickBuildTargetSec()/60)+'-minute class from scratch '
+      +'(fresh YouTube songs plus 1-2 of your mashups)?\n\nOK — build a new class, replacing the '
+      +ts.length+' song'+(ts.length===1?'':'s')+' currently here.\nCancel — just reset those songs to automatic.');
+    if(!replace){ resetPinnedToAuto(); return; }
+  }
+  const btn = $('#btnQuickClass'), label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Building…';
+  try{
+    const built = await buildClassFromScratch();
+    if(!built){ toast('Could not build a class — add a YouTube API key (Search setup) or a few saved playlists first.'); return; }
+    store.tracks = built.list; store.currentId = null; activeList = null;
+    $('#plName').value = ''; $('#plSavedNote').hidden = true;
+    autoPlanClass(store.tracks, true);
+    save(); renderTracks();
+    toast('Built a '+fmt(built.total)+' class — '+built.list.length+' song'+(built.list.length===1?'':'s')
+      +(built.mashupsUsed ? ' ('+built.mashupsUsed+' of yours)' : '')+', warm-up to cool-down.');
+  } finally {
+    btn.disabled = !tracks().length; btn.textContent = label;
+  }
 };
 // Ian's feedback: "sort by difficulty" didn't say what it actually did, or which way it had
 // just sorted. The button label now always names the sort that clicking it will produce next
