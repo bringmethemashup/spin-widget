@@ -1258,12 +1258,25 @@ const SPIN_SYNC_URL = MASHUP_SUPABASE_URL+'/rest/v1/spin_playlists';
 const SPIN_SYNC_HEADERS = { apikey: MASHUP_SUPABASE_ANON_KEY, Authorization: 'Bearer '+MASHUP_SUPABASE_ANON_KEY };
 async function cloudFetchPlaylists(){
   const r = await fetch(SPIN_SYNC_URL+'?select=id,data,updated_at', { headers: SPIN_SYNC_HEADERS });
-  if(!r.ok) throw new Error('spin_playlists fetch failed: '+r.status);
+  if(!r.ok) throw new Error('fetch '+r.status+' '+(await r.text().catch(()=>'')).slice(0,160));
   return r.json(); // [{id,data,updated_at}]
 }
+// Sync bookkeeping lives in the store so it survives a reload: store.pendingPush is the set of
+// playlist ids whose latest edit has NOT reached the cloud yet (retried on every sync pass),
+// store.deletedIds are tombstones so a playlist deleted on one device can't be resurrected by
+// another device that still has it (or by the cloud copy if the delete request failed).
+function syncMarkPending(id){ store.pendingPush = store.pendingPush||{}; store.pendingPush[id] = 1; }
+function syncStatus(kind, detail){
+  const el = document.getElementById('syncPill'); if(!el) return;
+  el.dataset.kind = kind;
+  const t = new Date().toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+  el.textContent = kind==='ok' ? 'Synced '+t : kind==='busy' ? 'Syncing…' : 'Sync failed — tap to retry';
+  el.title = detail || '';
+}
 async function cloudPushPlaylist(p){
+  syncMarkPending(p.id);
   try{
-    await fetch(SPIN_SYNC_URL, {
+    const r = await fetch(SPIN_SYNC_URL, {
       method: 'POST',
       headers: Object.assign({}, SPIN_SYNC_HEADERS, {
         'Content-Type': 'application/json',
@@ -1271,42 +1284,78 @@ async function cloudPushPlaylist(p){
       }),
       body: JSON.stringify({ id: p.id, data: p, updated_at: new Date(p.updatedAt).toISOString() })
     });
-  }catch(e){ console.warn('Playlist sync (push) failed, staying local for now', e); }
+    if(!r.ok) throw new Error('push '+r.status+' '+(await r.text().catch(()=>'')).slice(0,160));
+    if(store.pendingPush) delete store.pendingPush[p.id];
+    try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
+    return true;
+  }catch(e){
+    console.warn('Playlist sync (push) failed — will retry', e);
+    try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(_){}
+    syncStatus('fail', String(e.message||e));
+    return false;
+  }
 }
 async function cloudDeletePlaylist(id){
+  store.deletedIds = store.deletedIds||{}; store.deletedIds[id] = Date.now();
+  if(store.pendingPush) delete store.pendingPush[id];
+  try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
   try{
-    await fetch(SPIN_SYNC_URL+'?id=eq.'+encodeURIComponent(id), { method:'DELETE', headers: SPIN_SYNC_HEADERS });
-  }catch(e){ console.warn('Playlist sync (delete) failed', e); }
+    const r = await fetch(SPIN_SYNC_URL+'?id=eq.'+encodeURIComponent(id), { method:'DELETE', headers: SPIN_SYNC_HEADERS });
+    if(!r.ok) throw new Error('delete '+r.status);
+    delete store.deletedIds[id];
+    try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
+  }catch(e){ console.warn('Playlist sync (delete) failed — will retry', e); syncStatus('fail', String(e.message||e)); }
 }
-// Runs once at startup. Merges the cloud list into store.playlists by id, newest
-// updatedAt wins per playlist; anything local-only or locally newer gets pushed back up
-// so the cloud catches up too. Silently gives up on any network failure — the app
-// already works fully offline off its localStorage cache, this is a bonus sync layer,
-// never a requirement to function.
+// Runs at startup, whenever the tab/app comes back to the foreground, when the network returns,
+// and every minute. Merges the cloud list into store.playlists by id (newest updatedAt wins per
+// playlist), retries every push/delete that failed earlier, and reports the result in #syncPill.
+// The app still works fully offline off localStorage; this is the layer that keeps devices equal.
+let syncBusy = false;
 async function syncPlaylistsWithCloud(){
-  let rows;
-  try{ rows = await cloudFetchPlaylists(); }
-  catch(e){ console.warn('Playlist sync (fetch) failed, staying on local copy', e); return; }
-  const byId = new Map(store.playlists.map(p=>[p.id,p]));
-  const toPush = [];
-  for(const row of rows){
-    const cloudP = row.data; if(!cloudP || !cloudP.id) continue;
-    const localP = byId.get(cloudP.id);
-    if(!localP){ byId.set(cloudP.id, cloudP); }
-    else if((cloudP.updatedAt||0) > (localP.updatedAt||0)){ byId.set(cloudP.id, cloudP); }
-    else if((localP.updatedAt||0) > (cloudP.updatedAt||0)){ toPush.push(localP); }
-  }
-  const cloudIds = new Set(rows.map(r=>r.id));
-  for(const p of store.playlists){ if(!cloudIds.has(p.id)) toPush.push(p); }
-  const merged = Array.from(byId.values());
-  const changed = merged.length !== store.playlists.length ||
-    merged.some(p=>{ const l = store.playlists.find(x=>x.id===p.id); return !l || l.updatedAt !== p.updatedAt; });
-  store.playlists = merged;
-  save();
-  toPush.forEach(cloudPushPlaylist);
-  if(changed && !$('#library').hidden) renderLibrary();
-  if(changed && !$('#loadPlMenu').hidden) renderLoadMenu();
+  if(syncBusy || ($('#ride') && !$('#ride').hidden)) return; syncBusy = true;
+  syncStatus('busy');
+  try{
+    store.pendingPush = store.pendingPush||{}; store.deletedIds = store.deletedIds||{};
+    // 1) retry deletes that never landed
+    for(const id of Object.keys(store.deletedIds)) await cloudDeletePlaylist(id);
+    // 2) flush an edit that is still waiting in the autosave debounce
+    flushAutoSave();
+    let rows;
+    try{ rows = await cloudFetchPlaylists(); }
+    catch(e){ console.warn('Playlist sync (fetch) failed, staying on local copy', e); syncStatus('fail', String(e.message||e)); return; }
+    const byId = new Map(store.playlists.map(p=>[p.id,p]));
+    const toPush = [];
+    for(const row of rows){
+      const cloudP = row.data; if(!cloudP || !cloudP.id) continue;
+      if(store.deletedIds[cloudP.id]) continue;               // deleted here — don't resurrect
+      const localP = byId.get(cloudP.id);
+      if(!localP){ byId.set(cloudP.id, cloudP); }
+      else if(store.pendingPush[cloudP.id]){ toPush.push(localP); }  // local has unsent edits: they win
+      else if((cloudP.updatedAt||0) > (localP.updatedAt||0)){
+        byId.set(cloudP.id, cloudP);
+        // the open draft was this playlist and had no unsaved changes — pull the new songs in too
+        if(store.currentId===cloudP.id && JSON.stringify(store.tracks)===JSON.stringify(localP.tracks)){
+          store.tracks = JSON.parse(JSON.stringify(cloudP.tracks||[])); draftRefreshed = true;
+        }
+      }
+      else if((localP.updatedAt||0) > (cloudP.updatedAt||0)){ toPush.push(localP); }
+    }
+    const cloudIds = new Set(rows.map(r=>r.id));
+    for(const p of store.playlists){ if(!cloudIds.has(p.id) && !store.deletedIds[p.id]) toPush.push(p); }
+    const merged = Array.from(byId.values()).filter(p=>!store.deletedIds[p.id]);
+    const changed = merged.length !== store.playlists.length ||
+      merged.some(p=>{ const l = store.playlists.find(x=>x.id===p.id); return !l || l.updatedAt !== p.updatedAt; });
+    store.playlists = merged;
+    save();
+    const uniq = Array.from(new Map(toPush.map(p=>[p.id,p])).values());
+    const results = await Promise.all(uniq.map(cloudPushPlaylist));
+    if(changed && !$('#library').hidden) renderLibrary();
+    if(changed && !$('#loadPlMenu').hidden) renderLoadMenu();
+    if(draftRefreshed){ draftRefreshed = false; if(!$('#build').hidden) renderTracks(); }
+    if(results.every(Boolean)) syncStatus('ok');
+  } finally { syncBusy = false; }
 }
+let draftRefreshed = false;
 function mashupLabel(entry){
   return (entry.sourceSongs && entry.sourceSongs.length) ? entry.sourceSongs.map(s=>s.artist+' – '+s.title).join(' x ') : (entry.displayTitle||'');
 }
@@ -1613,8 +1662,9 @@ function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; 
 // to a song of a different length and still land at proportionally the same points.
 const store = {tracks:[], apiKey:'', keyOK:false, countUp:false, look:90, playlists:[], currentId:null, classLen:45, theme:'', timingPresets:[]};
 let autoSavePlT = 0;
+let quotaWarned = false;
 function save(){
-  try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
+  try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){ if(!quotaWarned){ quotaWarned = true; try{ toast('Browser storage is full — changes may not survive a reload. Tell Claude.'); }catch(_){} } }
   // Ian: "I'd prefer playlists to automatically save everything there is a change instead
   // of manually saving it every time... I have a feeling we'll forget to save and it'll all
   // go away." Whenever a named playlist is open (store.currentId set), keep its saved copy
@@ -1622,15 +1672,20 @@ function save(){
   // typing in a field) doesn't spam localStorage/Supabase with a write per keystroke.
   if(store.currentId){
     clearTimeout(autoSavePlT);
-    autoSavePlT = setTimeout(()=>{
-      const p = store.playlists.find(x=>x.id===store.currentId); if(!p) return;
-      const snap = JSON.stringify(store.tracks);
-      if(snap === JSON.stringify(p.tracks)) return; // nothing actually changed
-      p.tracks = JSON.parse(snap); p.updatedAt = Date.now();
-      try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
-      cloudPushPlaylist(p);
-    }, 700);
+    autoSavePlT = setTimeout(flushAutoSave, 700);
   }
+}
+// Writes the open draft into its saved playlist and pushes it. Called by the debounce above,
+// and immediately when the tab is hidden/closed so a quick edit-then-switch-apps is never lost.
+function flushAutoSave(){
+  clearTimeout(autoSavePlT);
+  if(!store.currentId) return;
+  const p = store.playlists.find(x=>x.id===store.currentId); if(!p) return;
+  const snap = JSON.stringify(store.tracks);
+  if(snap === JSON.stringify(p.tracks)) return; // nothing actually changed
+  p.tracks = JSON.parse(snap); p.updatedAt = Date.now();
+  try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
+  cloudPushPlaylist(p);
 }
 function loadStore(){
   try{
@@ -1639,6 +1694,8 @@ function loadStore(){
   }catch(e){}
   store.playlists = store.playlists || [];
   store.timingPresets = store.timingPresets || [];
+  store.pendingPush = store.pendingPush || {};
+  store.deletedIds = store.deletedIds || {};
   // one-time migration: counting-up was briefly the default; Ian's item 11 asked to flip back
   // to counting DOWN (time remaining) as the default, with a small elapsed sub-bar underneath
   // instead. Only forces the flip once, so a rider who later picks "Counting up" again keeps it.
@@ -1944,12 +2001,13 @@ function metaViaPlayer(id){
 // ---------- search + add ----------
 async function apiVideos(ids){
   const u = new URL('https://www.googleapis.com/youtube/v3/videos');
-  u.search = new URLSearchParams({part:'contentDetails,snippet',id:ids.join(','),key:store.apiKey}).toString();
+  u.search = new URLSearchParams({part:'contentDetails,snippet,status',id:ids.join(','),key:store.apiKey}).toString();
   const r = await fetch(u); const j = await r.json();
   if(!r.ok) throw new Error((j.error&&j.error.message)||'YouTube request failed');
   return (j.items||[]).map(v=>({
     id:v.id, title:decode(v.snippet.title), channel:decode(v.snippet.channelTitle), dur:isoDur(v.contentDetails.duration),
-    thumb:(v.snippet.thumbnails.medium||v.snippet.thumbnails.default||{}).url,
+    thumb:((v.snippet.thumbnails||{}).medium||(v.snippet.thumbnails||{}).default||{}).url,
+    embeddable: !(v.status && v.status.embeddable===false), priv: (v.status&&v.status.privacyStatus)||'public',
     extra:(v.snippet.description||'').slice(0,600)+' '+(v.snippet.tags||[]).join(' ')
   }));
 }
@@ -1966,15 +2024,15 @@ function ytPlaylistId(s){
 // Ian: "copy the link of the YouTube playlist and everything will load into the widget."
 // playlistItems.list is paginated at 50/page; capped at 10 pages (500 songs) as a sane ceiling.
 async function fetchPlaylistVideoIds(ytPlId){
-  const ids = []; let pageToken = '';
+  const ids = []; let pageToken = ''; fetchPlaylistVideoIds.titles = {};
   for(let page=0; page<10; page++){
     const u = new URL('https://www.googleapis.com/youtube/v3/playlistItems');
-    const params = {part:'contentDetails',maxResults:'50',playlistId:ytPlId,key:store.apiKey};
+    const params = {part:'contentDetails,snippet',maxResults:'50',playlistId:ytPlId,key:store.apiKey};
     if(pageToken) params.pageToken = pageToken;
     u.search = new URLSearchParams(params).toString();
     const r = await fetch(u); const j = await r.json();
     if(!r.ok) throw new Error((j.error&&j.error.message)||'Could not read that playlist');
-    (j.items||[]).forEach(it=>{ const vid = it.contentDetails && it.contentDetails.videoId; if(vid) ids.push(vid); });
+    (j.items||[]).forEach(it=>{ const vid = it.contentDetails && it.contentDetails.videoId; if(vid){ ids.push(vid); fetchPlaylistVideoIds.titles[vid] = (it.snippet&&it.snippet.title)||vid; } });
     if(!j.nextPageToken) break;
     pageToken = j.nextPageToken;
   }
@@ -1994,12 +2052,40 @@ async function importYouTubePlaylist(ytPlId){
   try{
     const [ids, plTitle] = await Promise.all([fetchPlaylistVideoIds(ytPlId), fetchPlaylistTitle(ytPlId)]);
     if(!ids.length){ toast('That playlist looks empty or private.'); return; }
-    const metas = await apiVideosChunked(ids);
-    if(!metas.length){ toast('Could not read any videos from that playlist.'); return; }
+    const titles = fetchPlaylistVideoIds.titles || {};
+    const metasAll = await apiVideosChunked(ids);
+    if(!metasAll.length){ toast('Could not read any videos from that playlist.'); return; }
+    const seen = new Set(store.tracks.map(t=>t.id)), got = new Set(metasAll.map(m=>m.id));
+    const unavailable = ids.filter(id=>!got.has(id)).map(id=>titles[id]||id);           // deleted / private — YouTube returns nothing
+    const blocked = metasAll.filter(m=>!m.embeddable);                                  // exists, but will not play in the widget
+    const good = metasAll.filter(m=>m.embeddable);
+    const replaced = [], noReplacement = [], repOrder = new Map();
+    for(const m of blocked){
+      toast('Finding a playable version of "'+m.title+'"…');
+      let rep = null;
+      try{ rep = await youtubeDiscoverySearch(m.title, new Set([m.id].concat(good.map(x=>x.id), Array.from(seen)))); }catch(e){}
+      if(rep && rep.embeddable){ repOrder.set(rep.id, ids.indexOf(m.id)+0.5); good.push(rep); replaced.push(m.title+'  →  '+rep.title+' ('+rep.channel+')'); }
+      else noReplacement.push(m.title);
+    }
+    // keep the playlist's own order: replacements go where the blocked song was
+    const order = new Map(ids.map((id,i)=>[id,i]));
+    let added = 0;
+    repOrder.forEach((v,k)=>order.set(k,v));
+    good.sort((x,y)=>{ const ox = order.has(x.id)?order.get(x.id):1e9, oy = order.has(y.id)?order.get(y.id):1e9; return ox-oy; });
     const hadPlaylistOpen = !!store.currentId;
-    metas.forEach(m=>{ store.tracks.push(makeTrack(m)); });
+    good.forEach(m=>{ if(seen.has(m.id)) return; seen.add(m.id); store.tracks.push(makeTrack(m)); added++; });
     autoPlanClass(store.tracks); save(); renderTracks();
-    toast('Added '+metas.length+' song'+(metas.length===1?'':'s')+' from the playlist.');
+    const problems = unavailable.length + noReplacement.length + replaced.length;
+    toast('Added '+added+' of '+ids.length+' songs'+(problems?' — see the note below':'.'));
+    if(problems){
+      const lines = [];
+      if(unavailable.length) lines.push(unavailable.length+' deleted or private on YouTube (not added): '+unavailable.join('; '));
+      if(noReplacement.length) lines.push(noReplacement.length+' cannot be played in the widget and no replacement was found (not added): '+noReplacement.join('; '));
+      if(replaced.length) lines.push(replaced.length+' cannot be embedded, swapped for a playable version — check these are the right ones: '+replaced.join('; '));
+      showSavedNote(lines.join('   |   '));
+      clearTimeout(savedNoteT); savedNoteT = setTimeout(()=>{ $('#plSavedNote').hidden = true; }, 120000);
+      try{ alert('Playlist import report\n\n'+lines.join('\n\n')); }catch(e){}
+    }
     // A brand-new import (nothing named yet) gets a name popup; adding into a playlist
     // that's already named just auto-saves silently from here (see save()).
     if(!hadPlaylistOpen) openNamePlaylistDialog(plTitle);
@@ -3393,7 +3479,7 @@ function createSharedPlayer(videoId){
     playerVars:{autoplay:1,controls:1,rel:0,fs:0,playsinline:1,iv_load_policy:3,modestbranding:1,cc_load_policy:0,cc_lang_pref:'',hl:'en'},
     events:{onReady:()=>{ ytOK = true; try{ player.unloadModule('captions'); player.unloadModule('cc'); player.setOption('captions','track',{}); }catch(e){} },
       onStateChange:ev=>{ if(ev.data===0) nextTrack(); syncPlayBtn(ev.data); if(ev.data===1){ try{ player.unloadModule('captions'); player.setOption('captions','track',{}); }catch(e){} } },
-      onError:()=>{ toast('That video will not play here. Skipping.'); setTimeout(nextTrack,1200); }}});
+      onError:()=>{ const bt = tracks()[cur]; toast('"'+(bt?bt.title:'That video')+'" will not play here (embedding blocked). Skipping.'); setTimeout(nextTrack,1200); }}});
 }
 async function startClass(from){
   const ts = tracks(); if(!ts.length) return;
@@ -3822,7 +3908,8 @@ function playlistSearchText(p){
   const dateStr = new Date(p.updatedAt).toLocaleDateString();
   const dateLong = new Date(p.updatedAt).toDateString();
   const songBits = (p.tracks||[]).map(t=>[t.title,t.channel,t.mashupEntry&&t.mashupEntry.mashupArtist].filter(Boolean).join(' ')).join(' ');
-  return [p.name, p.theme, dateStr, dateLong, songBits].filter(Boolean).join(' ').toLowerCase();
+  const d = new Date(p.updatedAt), dm = (d.getMonth()+1)+'/'+d.getDate(), dm2 = (d.getMonth()+1)+'-'+d.getDate(), dm3 = ''+(d.getMonth()+1)+d.getDate();
+  return [p.name, p.theme, dateStr, dateLong, dm, dm2, dm3, songBits].filter(Boolean).join(' ').toLowerCase();
 }
 function renderLibrary(){
   const q = ($('#plSearch').value||'').trim().toLowerCase();
@@ -3956,7 +4043,18 @@ document.addEventListener('click', e=>{
 });
 document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeLoadMenu(); });
 function startSavedPlaylist(id){
-  const p = store.playlists.find(x=>x.id===id); if(!p || !p.tracks.length) return;
+  let p = store.playlists.find(x=>x.id===id); if(!p || !p.tracks.length) return;
+  // If this playlist is also the one open in the Creator and the editor holds a different (longer)
+  // set of songs than the saved copy, the saved copy is stale — never ride the short one silently.
+  if(id===store.currentId && store.tracks.length && JSON.stringify(store.tracks)!==JSON.stringify(p.tracks)){
+    const eD = totalDur(store.tracks), sD = totalDur(p.tracks);
+    if(store.tracks.length>p.tracks.length || eD>sD){
+      if(confirm('The editor has '+store.tracks.length+' songs ('+fmt(eD)+') but the saved copy of "'+p.name+'" has only '+p.tracks.length+' ('+fmt(sD)+').\n\nOK = use the editor version (and save it).  Cancel = ride the saved copy.')){
+        flushAutoSave(); p = store.playlists.find(x=>x.id===id) || p;
+      }
+    }
+  }
+  toast('Starting "'+p.name+'": '+p.tracks.length+' songs, '+fmt(totalDur(p.tracks)));
   p.tracks.forEach(t=>{ if(!t.plan || !t.opts){ t.opts = quickPick(t,'balanced',0); rebuild(t); } });
   autoPlanClass(p.tracks); save();   // older playlists saved before auto-planning get the arc too
   activeList = p.tracks; activeOrigin = 'library';
@@ -4068,6 +4166,20 @@ showLibrary();
 renderTracks();
 loadYT();
 syncPlaylistsWithCloud();
+{
+  const pill = document.createElement('button');
+  pill.id = 'syncPill'; pill.type = 'button'; pill.dataset.kind = 'busy'; pill.textContent = 'Syncing…';
+  pill.style.cssText = 'position:fixed;left:10px;bottom:10px;z-index:5;font:600 11px Outfit,system-ui,sans-serif;padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:rgba(20,22,30,.85);color:#cfd3dc;cursor:pointer';
+  const st = document.createElement('style');
+  st.textContent = '#syncPill[data-kind=ok]{color:#7ee2a0}#syncPill[data-kind=fail]{color:#ff8a8a;border-color:#ff8a8a}#ride:not([hidden]) ~ #syncPill{display:none}';
+  document.head.appendChild(st); document.body.appendChild(pill);
+  pill.onclick = ()=>{ if(pill.dataset.kind==='fail' && pill.title) alert('Sync problem: '+pill.title); syncPlaylistsWithCloud(); };
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') syncPlaylistsWithCloud(); else flushAutoSave(); });
+  window.addEventListener('pagehide', flushAutoSave);
+  window.addEventListener('focus', ()=>syncPlaylistsWithCloud());
+  window.addEventListener('online', ()=>syncPlaylistsWithCloud());
+  setInterval(()=>{ if(document.visibilityState==='visible' && $('#ride').hidden) syncPlaylistsWithCloud(); }, 60000);
+}
 })();
 </script>
 </body>
