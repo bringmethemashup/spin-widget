@@ -520,6 +520,34 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 #nowLine span{position:absolute;top:8px;left:9px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.7);border-radius:4px;padding:1px 6px;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
 .controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;flex:none}
 .controls .btn{padding:7px 10px;font-size:clamp(12px,1.7vh,15px)}
+/* ---- Legibility pass (2026-10-01) ----
+   Ian's gym screenshots: once #panel takes the active zone's color (white / green / yellow /
+   blue / red), the cards inside it (stats, "Next:" callout, wtype banner, song title, buttons)
+   kept their DARK backgrounds but inherited the zone's dark ink as text color, so on white and
+   green the BPM/RPM, Song left, Next:, and Prev/Pause/Next were dark-on-dark and basically
+   invisible; on blue the small caption text sat at ~3.9:1 and the pale-blue banner washed out.
+   Fix: every small-text element is either on its OWN dark card with explicit near-white text
+   (never inheriting the zone ink), or on the zone color with the zone's ink plus a legibility
+   shadow when that ink is white. Zone color stays the dominant thing; text no longer depends on it. */
+#panel .np{background:rgba(8,12,20,.72);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:5px 12px;color:#fff}
+#panel .np .nt,#panel .np .nm{color:#fff;text-shadow:none}
+#panel .np .nm{color:#d3dbe9}
+#panel .wtype{background:rgba(8,12,20,.82);color:#fff;border:1px solid rgba(255,255,255,.3);text-shadow:none}
+#panel #callout{background:rgba(8,12,20,.88);color:#fff;border:1px solid rgba(255,255,255,.18)}
+#panel .stat{background:linear-gradient(165deg,rgba(14,19,30,.94),rgba(8,12,20,.94));color:#fff;border-color:rgba(255,255,255,.2)}
+#panel .stat .k{color:#d3dbe9;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+#panel .stat .v{color:#fff;text-shadow:none}
+#panel #timerMode{background:rgba(8,12,20,.82);color:#fff;border-color:rgba(255,255,255,.32);font-weight:700}
+#panel #timerSub{background:rgba(8,12,20,.35);box-shadow:none}
+#panel .controls .btn,#panel .controls select.btn{background:rgba(8,12,20,.9);color:#fff;border-color:rgba(255,255,255,.3)}
+#panel .controls .btn:hover{border-color:#fff}
+#panel .controls select.btn option{background:#161b25;color:#fff}
+#panel[data-ink="light"] #timer,#panel[data-ink="light"] .zonename,#panel[data-ink="light"] .zonelabel{text-shadow:0 2px 4px rgba(0,0,0,.4),0 0 18px rgba(0,0,0,.25)}
+#panel[data-ink="dark"] #timer{text-shadow:none}
+#panel #hw{border-color:rgba(255,255,255,.25)}
+.hwseg span:last-child{opacity:1}
+.hwseg[style*="color:#fff"]{text-shadow:0 1px 3px rgba(0,0,0,.55);font-weight:800}
+.hwseg.past{opacity:.4}
 @media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before,#ride.fire::after,#ride.race::after{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
 </style>
 </head>
@@ -585,6 +613,11 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
           <button class="btn" id="btnSaveKey">Save key</button>
         </div>
         <p class="note">The key is saved in this browser only. The free quota allows roughly 100 searches a day.</p>
+        <p class="note" style="margin-top:14px"><b>Real BPM for YouTube songs (optional).</b> Get a free key at <a href="https://getsongbpm.com/api" target="_blank" rel="noopener">getsongbpm.com/api</a> and paste it here. Each new song is looked up by artist and title; anything it can't match stays a flagged estimate. Mashups always use the tempo already in your mashup library.</p>
+        <div class="row">
+          <input id="bpmKey" type="text" placeholder="Paste GetSongBPM key" aria-label="GetSongBPM API key" autocomplete="off">
+          <button class="btn" id="btnSaveBpmKey">Save BPM key</button>
+        </div>
       </details>
       <button class="mini" id="btnShowSetup" hidden style="margin-top:12px">Search setup</button>
       <div id="setupDock"><button class="mini" id="btnDockSetup" title="YouTube search key and setup">Search setup</button></div>
@@ -736,7 +769,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
       <div id="songProgressDone"></div>
     </div>
     <div class="stats">
-      <div class="stat"><span class="k">BPM</span><span class="v" id="bpmV">120</span><i class="pulse" id="pulse"></i></div>
+      <div class="stat"><span class="k">RPM</span><span class="v" id="bpmV">120</span><i class="pulse" id="pulse"></i></div>
       <div class="stat"><span class="k">Song left</span><span class="v" id="songLeft">0:00</span></div>
     </div>
     <div id="hw"><div id="hwInner"></div><div id="nowLine"><span>NOW</span></div></div>
@@ -1242,6 +1275,7 @@ function loadMashupCatalog(){
   }).then(list=>{
     mashupCatalog = list.filter(e=>e.isOwnUpload && e.audio && e.audio.publicLink);
     mashupCatalog.sort((a,b)=> new Date(b.dateAdded||0) - new Date(a.dateAdded||0));
+    setTimeout(()=>{ try{ syncMashupTempos(mashupCatalog); }catch(e){ console.warn('mashup tempo sync failed',e); } },0);
     return mashupCatalog;
   });
   return mashupCatalogPromise;
@@ -1660,7 +1694,7 @@ function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; 
 // they are already timed with the correct intervals." A saved timing preset is a shape, not
 // absolute seconds — {z, frac} blocks (frac = share of total duration) so it can be reapplied
 // to a song of a different length and still land at proportionally the same points.
-const store = {tracks:[], apiKey:'', keyOK:false, countUp:false, look:90, playlists:[], currentId:null, classLen:45, theme:'', timingPresets:[]};
+const store = {tracks:[], apiKey:'', bpmKey:'', keyOK:false, countUp:false, look:90, playlists:[], currentId:null, classLen:45, theme:'', timingPresets:[]};
 let autoSavePlT = 0;
 let quotaWarned = false;
 function save(){
@@ -1717,16 +1751,25 @@ function makeTrack(m){
   const o = quickPick(t,'balanced',0);
   t.opts = o; t.plan = buildPlan(t,o);
   applySavedTimingIfAny(t);
+  const hit = bpmCache[t.id]; if(store.bpmKey && hit && hit.bpm){ t.bpm = clamp(hit.bpm,60,200); t.bpmSrc = 'lookup'; if(hit.key) t.key = hit.key; t.plan = buildPlan(t,t.opts); }
+  setTimeout(()=>enrichBpm(t),0);
   return t;
+}
+// The mashup database already stores a real tempo (and key) for every upload, as `tempo` / `key`
+// on each track's data. Use it instead of the genre guess. Valid range matches the engine's clamp.
+function libTempo(entry){
+  const v = Math.round(+(entry && entry.tempo));
+  return (v>=40 && v<=220) ? clamp(v,60,200) : null;
 }
 function makeMashupTrack(entry){
   const label = mashupLabel(entry);
   const g = guessMeta((entry.displayTitle||'')+' '+label, (entry.tags||[]).join(' '));
+  const lt = libTempo(entry); if(lt){ g.bpm = lt; g.bpmSrc = 'library'; }
   const thumb = (entry.video && entry.video.sourceId) ? ('https://i.ytimg.com/vi/'+entry.video.sourceId+'/mqdefault.jpg') : MASHUP_PLACEHOLDER;
   const t = {uid:nextUid(), kind:'mashup', id:'mashup:'+entry.id, catalogId:entry.id, title:entry.displayTitle||label, channel:entry.mashupArtist||'Bring Me The Mashup',
     dur:210, durKnown:false, thumb, bpm:g.bpm, bpmSrc:g.bpmSrc, genre:g.genre, offset:0, opts:null, plan:null,
     audioLink:(entry.audio && entry.audio.publicLink) || null, videoId:(entry.video && entry.video.sourceId) || null,
-    mashupEntry:entry};
+    mashupEntry:entry, key:(entry.key||'')};
   const o = quickPick(t,'balanced',0);
   t.opts = o; t.plan = buildPlan(t,o);
   applySavedTimingIfAny(t);
@@ -1741,6 +1784,132 @@ function addMashup(entry){
   return t;
 }
 function rebuild(t){ t.plan = buildPlan(t,t.opts); }
+
+// ---------- real BPM: mashup library + GetSongBPM ----------
+// Ian: "bpms are still incorrect ... when a song is added to the playlist it gets actually checked
+// by a site or a database that already has this information." Mashups: read `tempo`/`key` straight
+// from his mashup database (the catalog already loaded above). Regular YouTube songs: look the
+// artist + title up on GetSongBPM (free API key, backlink required — see #bpmCredit). Both only
+// ever replace a GUESS; a value Ian typed/tapped himself (bpmSrc 'manual') is never overwritten.
+const allTrackLists = () => [store.tracks, ...(store.playlists||[]).map(p=>p.tracks||[])];
+function replanAfterBpm(t){
+  const list = allTrackLists().find(l=>l.includes(t));
+  if(list && list===store.tracks && !t.manual) autoPlanClass(list); else rebuild(t);
+}
+function syncMashupTempos(cat){
+  if(!cat || !cat.length) return;
+  const byId = new Map(cat.map(e=>[String(e.id),e]));
+  let changed = 0; const touchedPl = new Set();
+  (store.playlists||[]).forEach(p=>{ (p.tracks||[]).forEach(t=>{
+    if(t.kind!=='mashup' || t.bpmSrc==='manual') return;
+    const e = byId.get(String(t.catalogId)); const lt = e && libTempo(e); if(!lt) return;
+    if(t.bpm!==lt || t.bpmSrc!=='library' || t.key!==(e.key||'')){ t.bpm = lt; t.bpmSrc = 'library'; t.key = e.key||''; rebuild(t); touchedPl.add(p); changed++; }
+  }); });
+  store.tracks.forEach(t=>{
+    if(t.kind!=='mashup' || t.bpmSrc==='manual') return;
+    const e = byId.get(String(t.catalogId)); const lt = e && libTempo(e); if(!lt) return;
+    if(t.bpm!==lt || t.bpmSrc!=='library' || t.key!==(e.key||'')){ t.bpm = lt; t.bpmSrc = 'library'; t.key = e.key||''; changed++; }
+  });
+  if(changed){
+    if(store.tracks.some(t=>t.kind==='mashup')) autoPlanClass(store.tracks);
+    touchedPl.forEach(p=>{ p.updatedAt = Date.now(); try{ cloudPushPlaylist(p); }catch(e){} });
+    save(); try{ renderTracks(); }catch(e){}
+  }
+}
+
+const BPM_LS = 'spinwidget:bpm:v1';
+let bpmCache = {}; try{ bpmCache = JSON.parse(localStorage.getItem(BPM_LS)||'{}')||{}; }catch(e){}
+const bpmCacheSave = () => { try{ localStorage.setItem(BPM_LS, JSON.stringify(bpmCache)); }catch(e){} };
+const BPM_MISS_TTL = 7*24*3600*1000;
+// Pull "artist" and "song" out of a YouTube video title (+ channel as the fallback artist).
+function splitYtTitle(raw, channel){
+  let t = String(raw||'').replace(/[\[(][^\])]*(official|video|audio|lyric|visuali[sz]er|hd|hq|4k|mv|remaster|live|clip)[^\])]*[\])]/ig,' ')
+    .replace(/\b(official\s+(music\s+)?video|official\s+audio|lyric\s+video|music\s+video)\b/ig,' ')
+    .replace(/\s+/g,' ').trim();
+  let artist = '', title = t;
+  const m = t.split(/\s+[-–—|]\s+/);
+  if(m.length>=2){ artist = m[0]; title = m.slice(1).join(' '); }
+  else artist = String(channel||'').replace(/\s*-\s*Topic$/i,'').replace(/VEVO$/i,'').replace(/\bofficial\b/ig,'').trim();
+  const stripFt = x => x.replace(/\s*[\[(]?\s*(feat\.?|ft\.?|featuring|with)\s+[^\])]*[\])]?/ig,'').replace(/\s+/g,' ').trim();
+  return {artist: stripFt(artist).split(/\s*(?:,|&| x | and )\s*/i)[0].trim(), artistFull: artist, title: stripFt(title)};
+}
+const bpmNorm = x => String(x||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
+function bpmTitleSim(a,b){
+  const A = new Set(bpmNorm(a).split(' ').filter(Boolean)), B = new Set(bpmNorm(b).split(' ').filter(Boolean));
+  if(!A.size || !B.size) return 0; let n = 0; A.forEach(w=>{ if(B.has(w)) n++; });
+  return n / Math.max(A.size,B.size);
+}
+let bpmNetFailed = false;
+async function getSongBpmFetch(path){
+  const r = await fetch('https://api.getsong.co/'+path+(path.includes('?')?'&':'?')+'api_key='+encodeURIComponent(store.bpmKey));
+  if(r.status===401 || r.status===403){ const e = new Error('GetSongBPM rejected the key'); e.bad = true; throw e; }
+  if(!r.ok) throw new Error('GetSongBPM error '+r.status);
+  return r.json();
+}
+async function lookupBpm(t){
+  const q = splitYtTitle(t.title, t.channel);
+  if(!q.title) return null;
+  const j = await getSongBpmFetch('search/?type=both&limit=6&lookup='+encodeURIComponent('song:'+q.title+(q.artist?' artist:'+q.artist:'')));
+  const list = Array.isArray(j && j.search) ? j.search : [];
+  let best = null, bestScore = 0;
+  const hay = bpmNorm(t.title+' '+(t.channel||''));
+  for(const c of list){
+    const an = bpmNorm(c.artist && (c.artist.name||c.artist)); const ts = bpmTitleSim(q.title, c.title);
+    const artistOK = an && (hay.includes(an) || bpmNorm(q.artist).includes(an) || an.includes(bpmNorm(q.artist)) && q.artist);
+    const score = ts + (artistOK ? .5 : 0);
+    if(ts>=.6 && artistOK && score>bestScore){ best = c; bestScore = score; }
+  }
+  if(!best) return null;
+  let tempo = +best.tempo, key = best.key_of||'';
+  if(!(tempo>=40 && tempo<=220) && best.id){
+    const d = await getSongBpmFetch('song/?id='+encodeURIComponent(best.id));
+    const sg = d && (d.song||d); tempo = +(sg && sg.tempo); key = (sg && sg.key_of) || key;
+  }
+  if(!(tempo>=40 && tempo<=220)) return null;
+  return {bpm:Math.round(tempo), key};
+}
+function applyBpm(t, v){
+  t.bpm = clamp(v.bpm,60,200); t.bpmSrc = 'lookup'; if(v.key) t.key = v.key;
+  replanAfterBpm(t);
+}
+const bpmQueue = []; let bpmBusy = false, bpmStats = {found:0,miss:0}, bpmToastT = null;
+function enrichBpm(t){
+  if(!store.bpmKey || !t || t.kind!=='youtube' || t.bpmSrc!=='guess') return;
+  const c = bpmCache[t.id];
+  if(c && c.bpm){ applyBpm(t,c); return; }
+  if(c && c.miss && Date.now()-c.miss < BPM_MISS_TTL) return;
+  if(bpmQueue.includes(t)) return;
+  bpmQueue.push(t); runBpmQueue();
+}
+async function runBpmQueue(){
+  if(bpmBusy) return; bpmBusy = true;
+  while(bpmQueue.length){
+    const t = bpmQueue.shift(); if(t.bpmSrc!=='guess') continue;
+    try{
+      const v = await lookupBpm(t);
+      if(v){ bpmCache[t.id] = {bpm:v.bpm,key:v.key}; applyBpm(t,v); bpmStats.found++; }
+      else { bpmCache[t.id] = {miss:Date.now()}; bpmStats.miss++; }
+      bpmCacheSave(); save(); try{ renderTracks(); }catch(e){}
+    }catch(e){
+      bpmQueue.length = 0;
+      if(e.bad){ toast('GetSongBPM rejected that key — check it in Search setup.'); }
+      else if(!bpmNetFailed){ bpmNetFailed = true; toast('Couldn’t reach GetSongBPM from this browser — BPMs stay estimated. Tell Claude.'); }
+      console.warn('BPM lookup failed', e); break;
+    }
+    await new Promise(r=>setTimeout(r,250));
+  }
+  bpmBusy = false;
+  if(bpmStats.found+bpmStats.miss){
+    clearTimeout(bpmToastT);
+    bpmToastT = setTimeout(()=>{ toast('BPM lookup: '+bpmStats.found+' found'+(bpmStats.miss?', '+bpmStats.miss+' not matched (kept as estimates)':'')); bpmStats = {found:0,miss:0}; },300);
+  }
+}
+function enrichAllBpm(){
+  if(!store.bpmKey) return;
+  const seen = new Set();
+  allTrackLists().forEach(l=>l.forEach(t=>{ if(t.kind==='youtube' && t.bpmSrc==='guess'){ if(seen.has(t.id)){ const c=bpmCache[t.id]; if(c&&c.bpm) applyBpm(t,c); return; } seen.add(t.id); enrichBpm(t); } }));
+}
+
 
 // ---------- automatic class planning ----------
 // The whole class re-plans itself whenever the playlist changes (song added, removed or
@@ -1811,7 +1980,8 @@ function classArtists(ts){
 // exactly.
 function provisionalTrack(entry){
   const g = guessMeta((entry.displayTitle||'')+' '+mashupLabel(entry), (entry.tags||[]).join(' '));
-  return {bpm:g.bpm, genre:g.genre, dur:210, offset:0};
+  const lt = Math.round(+(entry && entry.tempo)); // same rule as libTempo() below, inlined so this engine block has no outside dependency
+  return {bpm:((lt>=40 && lt<=220) ? Math.min(200,Math.max(60,lt)) : g.bpm), genre:g.genre, dur:210, offset:0};
 }
 // How well a catalogue entry matches the class theme: every word of the theme that turns
 // up in the title, artists or tags counts. Returns 0..1 (0 when there is no theme).
@@ -2230,7 +2400,7 @@ function trackHTML(t,i){
   // show the interval split, since the auto-planner now varies it song to song
   const iv = t.plan.style==='interval' && t.opts.workSec
     ? `<span title="Work / recover, in seconds">${t.opts.workSec}s on &middot; ${t.opts.restSec}s off</span>` : '';
-  const tip = t.bpmSrc==='guess' ? 'From genre — tap to correct' : (t.bpmSrc==='title' ? 'Found in the title' : 'Set by you');
+  const tip = ({guess:'Estimated from genre — tap to correct', title:'Found in the title', library:'From your mashup library', lookup:'Looked up on GetSongBPM'})[t.bpmSrc] || 'Set by you';
   return `<li class="track" data-uid="${t.uid}" data-level="${e.level}">
     <span class="tnum" aria-hidden="true">${i+1}</span>
     <img class="thumb" src="${esc(t.thumb)}" alt="" loading="lazy">
@@ -2509,6 +2679,7 @@ $('#btnSearch').onclick = doSearch;
 $('#q').addEventListener('keydown',e=>{ if(e.key==='Enter') doSearch(); });
 $('#btnAddLink').onclick = addLink;
 $('#link').addEventListener('keydown',e=>{ if(e.key==='Enter') addLink(); });
+$('#btnSaveBpmKey').onclick = ()=>{ store.bpmKey = $('#bpmKey').value.trim(); bpmNetFailed = false; save(); if(store.bpmKey){ toast('BPM key saved. Looking up your songs\u2026'); enrichAllBpm(); } else toast('BPM key cleared.'); };
 $('#btnSaveKey').onclick = ()=>{ store.apiKey = $('#apiKey').value.trim(); store.keyOK = false; setupForced = true; save(); syncSetupVis(); toast(store.apiKey?'Key saved. Run a search to check it.':'Key cleared.'); };
 $('#btnShowSetup').onclick = ()=>{ setupForced = true; syncSetupVis(); $('#settings').open = true; $('#settings').scrollIntoView({block:'nearest'}); };
 
@@ -3673,7 +3844,7 @@ function frame(){
       // of just a color box" — the panel itself now takes the zone color too, not just the
       // small zonecard sitting inside it, so the whole sidebar reads as the current zone.
       card.style.background = seg.race ? '' : z.color; card.style.color = seg.race ? '' : z.ink; setZoneVars(seg.z);
-      panel.style.background = seg.race ? '' : z.color; panel.style.color = seg.race ? '' : z.ink;
+      panel.style.background = seg.race ? '' : z.color; panel.style.color = seg.race ? '' : z.ink; panel.dataset.ink = (seg.race || z.ink==='#ffffff') ? 'light' : 'dark';
       card.classList.toggle('fire', seg.effect==='fire');
       card.classList.toggle('tunnel', seg.effect==='tunnel');
       // Ian: "ring of fire should have animated fire around the big box" / "the tunnel wheel
@@ -3746,7 +3917,7 @@ function frame(){
       card.classList.remove('flash'); hwInner.querySelectorAll('.hwseg').forEach(el=>el.classList.remove('past')); }
     setSpectrum(false);
     card.style.background = lead.color; card.style.color = lead.ink; setZoneVars(0);
-    panel.style.background = lead.color; panel.style.color = lead.ink;
+    panel.style.background = lead.color; panel.style.color = lead.ink; panel.dataset.ink = lead.ink==='#ffffff' ? 'light' : 'dark';
     card.classList.remove('fire','tunnel');
     $('#ride').classList.remove('fire','tunnel','race');
     setZoneName('Get ready'); setText('zoneLabel','First up: '+(first.race?'Race':fz.name));
@@ -4153,7 +4324,7 @@ $('#rideExit').onclick = exitRide;
 
 // ---------- init ----------
 $('#brandbar').innerHTML = $('#brandbar2').innerHTML = ZONES.map(z=>`<i style="background:${z.color}"></i>`).join('');
-$('#apiKey').value = store.apiKey || '';
+$('#apiKey').value = store.apiKey || ''; $('#bpmKey').value = store.bpmKey || '';
 syncSetupVis();
 $('#cLook').value = String(clamp(+store.look||90,45,240));
 $('#classLen').value = store.classLen || 45;
@@ -4166,6 +4337,15 @@ showLibrary();
 renderTracks();
 loadYT();
 syncPlaylistsWithCloud();
+// Real tempos for songs already in playlists: mashups from the library catalog, YouTube via GetSongBPM.
+setTimeout(()=>{ if(allTrackLists().some(l=>l.some(t=>t.kind==='mashup'))) loadMashupCatalog().catch(()=>{}); enrichAllBpm(); },1200);
+{
+  const cr = document.createElement('a');
+  cr.id = 'bpmCredit'; cr.href = 'https://getsongbpm.com'; cr.target = '_blank'; cr.rel = 'noopener'; cr.textContent = 'BPM data by GetSongBPM.com';
+  cr.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:5;font:600 11px Outfit,system-ui,sans-serif;color:#98a4b8;opacity:.75;text-decoration:none';
+  const st2 = document.createElement('style'); st2.textContent = '#ride:not([hidden]) ~ #bpmCredit{display:none}#bpmCredit:hover{opacity:1;text-decoration:underline}';
+  document.head.appendChild(st2); document.body.appendChild(cr);
+}
 {
   const pill = document.createElement('button');
   pill.id = 'syncPill'; pill.type = 'button'; pill.dataset.kind = 'busy'; pill.textContent = 'Syncing…';
