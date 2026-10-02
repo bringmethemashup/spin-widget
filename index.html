@@ -1334,7 +1334,16 @@ async function cloudDeletePlaylist(id){
   if(store.pendingPush) delete store.pendingPush[id];
   try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
   try{
-    const r = await fetch(SPIN_SYNC_URL+'?id=eq.'+encodeURIComponent(id), { method:'DELETE', headers: SPIN_SYNC_HEADERS });
+    // Ian (2026-10-02): a deleted playlist ("Britney Test Ride") kept coming back. Cause: a hard DELETE
+    // only removes the cloud row — any other device still holding its own local copy then saw "cloud
+    // doesn't have this one" and pushed it right back up. A deletion now leaves a TOMBSTONE row in the
+    // cloud (data.deleted=true) that every device honours: delete always wins over a stale copy.
+    const now = Date.now();
+    const r = await fetch(SPIN_SYNC_URL, {
+      method:'POST',
+      headers: Object.assign({}, SPIN_SYNC_HEADERS, {'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'}),
+      body: JSON.stringify({ id, data:{id, name:'(deleted)', tracks:[], deleted:true, deletedAt:now, updatedAt:now}, updated_at:new Date(now).toISOString() })
+    });
     if(!r.ok) throw new Error('delete '+r.status);
     delete store.deletedIds[id];
     try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
@@ -1359,8 +1368,14 @@ async function syncPlaylistsWithCloud(){
     catch(e){ console.warn('Playlist sync (fetch) failed, staying on local copy', e); syncStatus('fail', String(e.message||e)); return; }
     const byId = new Map(store.playlists.map(p=>[p.id,p]));
     const toPush = [];
+    const tombIds = new Set(); let clearedDraft = false;
     for(const row of rows){
       const cloudP = row.data; if(!cloudP || !cloudP.id) continue;
+      if(cloudP.deleted){                                     // deleted on some device — it stays deleted everywhere
+        tombIds.add(cloudP.id); byId.delete(cloudP.id); delete store.pendingPush[cloudP.id];
+        if(store.currentId===cloudP.id){ store.currentId = null; store.tracks = []; clearedDraft = true; }
+        continue;
+      }
       if(store.deletedIds[cloudP.id]) continue;               // deleted here — don't resurrect
       const localP = byId.get(cloudP.id);
       if(!localP){ byId.set(cloudP.id, cloudP); }
@@ -1376,10 +1391,11 @@ async function syncPlaylistsWithCloud(){
     }
     const cloudIds = new Set(rows.map(r=>r.id));
     for(const p of store.playlists){ if(!cloudIds.has(p.id) && !store.deletedIds[p.id]) toPush.push(p); }
-    const merged = Array.from(byId.values()).filter(p=>!store.deletedIds[p.id]);
+    const merged = Array.from(byId.values()).filter(p=>!store.deletedIds[p.id] && !tombIds.has(p.id));
     const changed = merged.length !== store.playlists.length ||
       merged.some(p=>{ const l = store.playlists.find(x=>x.id===p.id); return !l || l.updatedAt !== p.updatedAt; });
     store.playlists = merged;
+    if(clearedDraft){ const nb = document.getElementById('plName'); if(nb) nb.value = ''; try{ renderTracks(); }catch(e){} }
     save();
     const uniq = Array.from(new Map(toPush.map(p=>[p.id,p])).values());
     const results = await Promise.all(uniq.map(cloudPushPlaylist));
@@ -4191,8 +4207,35 @@ function savePlaylist(){
   cloudPushPlaylist(p);
 }
 function newPlaylist(){
-  store.tracks = []; store.currentId = null; $('#plName').value = ''; $('#plSavedNote').hidden = true; save(); renderTracks();
-  toast('Started a new playlist.');
+  // Ian (2026-10-02): "the second a new playlist is created it should be SAVED." So starting one creates
+  // the saved, cloud-synced record right now — empty, named from the theme or the date — and every song
+  // added after that auto-saves into it. If the open playlist is already an empty one, reuse it instead of
+  // piling up blanks.
+  const open = store.currentId && store.playlists.find(x=>x.id===store.currentId);
+  if(open && !(open.tracks||[]).length && !store.tracks.length){
+    $('#plName').value = open.name; renderTracks(); toast('Started a new playlist.'); return;
+  }
+  store.tracks = []; store.currentId = null; $('#plName').value = ''; $('#plSavedNote').hidden = true;
+  const now = Date.now(), d = new Date(now);
+  const name = (store.theme||'').trim() || ('Class '+d.toLocaleDateString([], {month:'short',day:'numeric'})+', '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}));
+  const p = {id:plId(), name, tracks:[], createdAt:now, updatedAt:now, theme:store.theme||''};
+  store.playlists.push(p); store.currentId = p.id; $('#plName').value = name;
+  save(); renderTracks();
+  cloudPushPlaylist(p);
+  showSavedNote('Saved \"'+name+'\" — it auto-saves from here');
+  toast('Started a new playlist — saved to the cloud.');
+}
+// Renaming: typing in the name box renames the open playlist right away (no Save click needed).
+{
+  let renameT = 0;
+  $('#plName').addEventListener('input', ()=>{
+    clearTimeout(renameT);
+    renameT = setTimeout(()=>{
+      const p = store.currentId && store.playlists.find(x=>x.id===store.currentId); if(!p) return;
+      const nm = ($('#plName').value||'').trim(); if(!nm || nm===p.name) return;
+      p.name = nm; p.updatedAt = Date.now(); save(); cloudPushPlaylist(p);
+    }, 700);
+  });
 }
 function loadPlaylistIntoCreator(id){
   const p = store.playlists.find(x=>x.id===id); if(!p) return;
