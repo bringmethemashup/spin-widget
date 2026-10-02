@@ -1697,7 +1697,27 @@ function toast(msg){ const el=$('#toast'); el.textContent=msg; el.hidden=false; 
 const store = {tracks:[], apiKey:'', bpmKey:'', keyOK:false, countUp:false, look:90, playlists:[], currentId:null, classLen:45, theme:'', timingPresets:[]};
 let autoSavePlT = 0;
 let quotaWarned = false;
+// Ian (2026-10-02): "ALL CLASSES NEED TO SAVE INTO THE CLOUD AND AUTOMATICALLY." Before this, a class
+// only reached the cloud if it had been explicitly named + Saved (that's what sets store.currentId).
+// A class made with Quick build class, or any draft songs were added to without hitting Save, lived
+// only in this browser's localStorage and never showed up on another device. Now: the moment a draft
+// has songs and no saved playlist behind it, one is created automatically (named from the box if
+// typed, otherwise dated) and pushed to the cloud; from there the existing debounce keeps it synced.
+function ensureDraftPlaylist(){
+  if(store.currentId || !store.tracks || !store.tracks.length) return;
+  const box = document.getElementById('plName');
+  const typed = box ? (box.value||'').trim() : '';
+  const now = Date.now(), d = new Date(now);
+  const name = typed || ('Class '+d.toLocaleDateString([], {month:'short',day:'numeric'})+', '+d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}));
+  const p = {id:plId(), name, tracks:JSON.parse(JSON.stringify(store.tracks)), createdAt:now, updatedAt:now, theme:store.theme||''};
+  store.playlists.push(p); store.currentId = p.id;
+  if(box) box.value = name;
+  try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
+  cloudPushPlaylist(p);
+  try{ showSavedNote('Auto-saved \"'+name+'\" to the cloud'); }catch(e){}
+}
 function save(){
+  ensureDraftPlaylist();
   try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){ if(!quotaWarned){ quotaWarned = true; try{ toast('Browser storage is full — changes may not survive a reload. Tell Claude.'); }catch(_){} } }
   // Ian: "I'd prefer playlists to automatically save everything there is a change instead
   // of manually saving it every time... I have a feeling we'll forget to save and it'll all
@@ -1713,6 +1733,7 @@ function save(){
 // and immediately when the tab is hidden/closed so a quick edit-then-switch-apps is never lost.
 function flushAutoSave(){
   clearTimeout(autoSavePlT);
+  ensureDraftPlaylist();
   if(!store.currentId) return;
   const p = store.playlists.find(x=>x.id===store.currentId); if(!p) return;
   const snap = JSON.stringify(store.tracks);
@@ -3979,7 +4000,7 @@ function showClassStats(){
 }
 $('#statsDone').onclick = ()=>{ $('#statsDlg').close(); exitRide(); };
 
-$('#btnStart').onclick = ()=>{ activeList = null; activeOrigin = 'build'; clearTheme(); startClass(0); };
+$('#btnStart').onclick = ()=>{ ensureDraftPlaylist(); activeList = null; activeOrigin = 'build'; clearTheme(); startClass(0); };
 $('#cPrev').onclick = ()=>{ if(cur>=0) prevTrack(); };
 $('#cNext').onclick = ()=>{ if(cur>=0 && cur<tracks().length-1) nextTrack(); };
 $('#cPlay').onclick = ()=>{
@@ -4114,7 +4135,7 @@ $('#plList').addEventListener('click', e=>{
     const p = store.playlists.find(x=>x.id===b.dataset.del);
     if(p && confirm('Delete "'+p.name+'"? This can\'t be undone.')){
       store.playlists = store.playlists.filter(x=>x.id!==b.dataset.del);
-      if(store.currentId===b.dataset.del) store.currentId = null;
+      if(store.currentId===b.dataset.del){ store.currentId = null; store.tracks = []; $('#plName').value = ''; $('#plSavedNote').hidden = true; renderTracks(); }
       save(); renderLibrary();
       cloudDeletePlaylist(b.dataset.del);
     }
@@ -4250,7 +4271,7 @@ function exitRide(){
     if(p) cloudPushPlaylist(p);
   } else { showCreator(); renderTracks(); }
 }
-$('#navCreator').onclick = ()=>{ freshenCreator(); showCreator(); };
+$('#navCreator').onclick = ()=>{ if($('#build').hidden) freshenCreator(); showCreator(); };
 $('#navStart').onclick = showLibrary;
 $('#btnSavePl').onclick = savePlaylist;
 $('#btnNewPl2').onclick = openNewPlaylist;
