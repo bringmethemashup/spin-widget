@@ -272,6 +272,13 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 .plsearch{display:block;width:100%;max-width:480px;margin:0 0 18px;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--panel2);color:var(--text);font-size:15px}
 .plsearch::placeholder{color:var(--muted)}
 #plNoMatch{color:var(--muted);padding:20px 0}
+#btnStart{margin-bottom:2px}
+.undogrp{display:inline-flex;gap:6px;margin-right:22px;padding-right:22px;border-right:1px solid var(--line)}
+.undogrp .btn:disabled{opacity:.4}
+#histDlg .hrow{display:flex;gap:10px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0}
+#histDlg .hrow small{display:block;color:var(--muted);margin-top:2px}
+#histDlg .hacts{display:flex;gap:6px;flex-shrink:0}
+#histList{max-height:52vh;overflow:auto}
 #plList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
 .plcard{background:var(--card-grad);border:1px solid var(--card-border);border-radius:16px;padding:18px 20px;display:flex;flex-direction:column;gap:12px;box-shadow:var(--shadow-sm);transition:transform .18s var(--ease),border-color .18s}
 .plcard:hover{transform:translateY(-2px);border-color:#3a4560}
@@ -624,14 +631,14 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     </div>
 
     <div class="list">
-      <div class="listhead"><h2>Class playlist</h2><span id="totals"></span></div>
+      <div class="listhead"><h2>Class playlist</h2><span id="totals"></span><button class="btn primary spectrum" id="btnStart" style="margin-left:auto">Start class</button></div>
       <div class="actions">
-        <button class="btn" id="btnArc">Build the arc</button>
+        <span class="undogrp"><button class="btn" id="btnUndo" title="Undo (Ctrl/Cmd+Z)" disabled>↶ Undo</button><button class="btn" id="btnRedo" title="Redo (Ctrl/Cmd+Shift+Z)" disabled>↷ Redo</button><button class="btn" id="btnHist" title="Go back to an earlier saved version of this class">Older versions</button></span>
+        <button class="btn arcbtn" id="btnArc">Build the arc</button>
         <button class="btn" id="btnSuggest">Suggest songs</button>
         <label class="lenbox" title="How long the class needs to run. Build the arc tells you if you're short."><input id="classLen" type="number" min="10" max="120" step="5" value="45" aria-label="Class length in minutes"> min class</label>
         <button class="btn" id="btnQuickClass">Quick build class</button>
         <button class="btn" id="btnRank">Sort: easiest first</button>
-        <button class="btn primary spectrum" id="btnStart">Start class</button>
       </div>
       <ol id="tracks"></ol>
       <div id="empty">Add songs from search or paste a link. The class plans itself as you go — easy opener, build, peak, cool down — and re-plans whenever you add, remove or reorder a song. Change any one song with One-tap plan or Remix it and it stays exactly as you set it.</div>
@@ -650,6 +657,7 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     <p>Pick a saved playlist to ride. Build or edit playlists in Playlist Creator.</p>
   </header>
   <input id="plSearch" type="search" placeholder="Search by date, theme, artist or song..." autocomplete="off" class="plsearch">
+  <div style="margin:0 0 12px"><button class="btn" id="btnDeleted">Recently deleted</button></div>
   <ol id="plList"></ol>
   <div id="plEmpty" hidden>No saved playlists yet. Build one in Playlist Creator, then hit Save playlist.</div>
   <div id="plNoMatch" hidden>No saved playlists match "<span id="plNoMatchQ"></span>".</div>
@@ -694,6 +702,14 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
   </div>
 </dialog>
 
+<dialog id="histDlg">
+  <div class="newform">
+    <h3 id="histTitle">Older versions</h3>
+    <p class="note" id="histNote">Every class keeps earlier saved versions in the cloud. Restoring never throws away the current one — it's saved as a version too.</p>
+    <div id="histList"></div>
+    <div class="newacts"><button type="button" class="btn" id="histClose">Close</button></div>
+  </div>
+</dialog>
 <dialog id="plNameDlg">
   <div class="newform">
     <h3>Name this playlist</h3>
@@ -949,8 +965,34 @@ const STYLES = {interval:'Intervals', timetrial:'Time trial', race:'Race', pyram
 // still call it "Intervals (edited)" instead of losing that context.
 function styleLabel(o){
   if(!o) return '';
-  if(o.style==='custom' && o.customBase && STYLES[o.customBase]) return STYLES[o.customBase]+' (edited)';
+  if(o.style==='custom'){
+    const k = inferStyleKey(o.customSegs) || (o.customBase && STYLES[o.customBase] ? o.customBase : null);
+    return k ? STYLES[k] : 'Custom';
+  }
   return STYLES[o.style] || '';
+}
+// Reads the workout type off the shape of the bar itself (Ian: "you can see time trial as one
+// color, intervals as back and forth of colors, a pyramid exactly as it is"), so editing the bar
+// never relabels a class as "edited"/"Custom" — it stays whatever it visibly is.
+function inferStyleKey(segs){
+  if(!Array.isArray(segs) || !segs.length) return null;
+  let v = segs.map(c=>c.effect ? c.effect : +c.z);
+  if(v.length>1 && v[0]===0) v = v.slice(1);            // the white lead-in isn't part of the shape
+  const m = []; v.forEach(x=>{ if(!m.length || m[m.length-1]!==x) m.push(x); });
+  if(m.length===1) return 'timetrial';
+  const num = m.map(x=>typeof x==='number' ? x : 5);
+  const distinct = new Set(num).size;
+  let up=0, down=0, flips=0;
+  for(let i=1;i<num.length;i++){ if(num[i]>num[i-1]) up++; else down++; }
+  let dir = 0;
+  for(let i=1;i<num.length;i++){ const d = Math.sign(num[i]-num[i-1]); if(d && dir && d!==dir) flips++; if(d) dir=d; }
+  if(down===0 && up>=2) return 'climb';
+  const pk = num.indexOf(Math.max(...num));
+  const rises = num.slice(0,pk+1).every((x,i,a)=>!i||x>a[i-1]), falls = num.slice(pk).every((x,i,a)=>!i||x<a[i-1]);
+  if(pk>0 && pk<num.length-1 && rises && falls && num.length>=3) return 'pyramid';
+  if(flips>=3 && distinct<=3) return 'interval';
+  if(flips>=2 && distinct<=2) return 'interval';
+  return null;
 }
 const GENRE_BPM = {'Pop':112,'Hip-hop':96,'R&B':92,'Rock':125,'House / EDM':126,'Techno':132,'Latin':100,'Country':106,'Disco / Throwback':118,'Mashup / Remix':122,'Other':118};
 const KEYWORDS = [
@@ -1122,7 +1164,7 @@ function buildCustomPlan(o){
   let acc = 0;
   const segs = o.customSegs.map(cs=>{
     const start = acc; acc += Math.max(5,+cs.dur||10);
-    return {z:clamp(Math.round(+cs.z||0),0,4), start, end:acc, label:'Custom', cue:'', race:false, effect:null};
+    return {z:clamp(Math.round(+cs.z||0),0,4), start, end:acc, label:'Custom', cue:'', race:false, effect:(cs.effect==='fire'||cs.effect==='tunnel')?cs.effect:null};
   });
   return {segs, D:acc, off:0, unit:unitSec(60), style:'custom', goal:o.goal||'balanced', N:segs.length};
 }
@@ -1732,8 +1774,110 @@ function ensureDraftPlaylist(){
   cloudPushPlaylist(p);
   try{ showSavedNote('Auto-saved \"'+name+'\" to the cloud'); }catch(e){}
 }
+
+// ===== Undo / redo + cloud version history =====
+// Ian: the instructor hit "Build the arc" by accident and lost her hand-timed songs. Every change
+// to the class is now undoable (button or Ctrl/Cmd+Z), and the cloud keeps older versions of each
+// playlist that can be restored later, even after a delete.
+let histPrev = null, histKey = null, histLastPush = 0, histApplying = false;
+const undoStack = [], redoStack = [];
+const lastVerAt = {}, lastVerSig = {};
+function histUpdateBtns(){
+  const u = document.getElementById('btnUndo'), r = document.getElementById('btnRedo');
+  if(u) u.disabled = !undoStack.length; if(r) r.disabled = !redoStack.length;
+}
+function histCapture(){
+  if(histApplying) return;
+  const key = store.currentId || null;
+  if(histKey && key && key!==histKey){ undoStack.length = 0; redoStack.length = 0; histPrev = null; }
+  if(key) histKey = key;
+  const snap = JSON.stringify(store.tracks||[]);
+  if(histPrev===null){ histPrev = snap; histUpdateBtns(); return; }
+  if(snap===histPrev) return;
+  const now = Date.now();
+  if(now-histLastPush > 800){ undoStack.push(histPrev); if(undoStack.length>60) undoStack.shift(); }
+  histLastPush = now;
+  redoStack.length = 0; histPrev = snap; histUpdateBtns();
+}
+function histApply(json){
+  histApplying = true;
+  try{
+    store.tracks.length = 0; JSON.parse(json).forEach(t=>store.tracks.push(t));
+    histPrev = json; save(); renderTracks();
+  } finally { histApplying = false; }
+  histUpdateBtns();
+}
+function histUndo(){
+  if(!undoStack.length){ toast('Nothing to undo.'); return; }
+  redoStack.push(JSON.stringify(store.tracks)); histApply(undoStack.pop()); toast('Undone.');
+}
+function histRedo(){
+  if(!redoStack.length){ toast('Nothing to redo.'); return; }
+  undoStack.push(JSON.stringify(store.tracks)); histApply(redoStack.pop()); toast('Redone.');
+}
+const SPIN_VER_URL = MASHUP_SUPABASE_URL+'/rest/v1/spin_playlist_versions';
+function songSig(tr){ return JSON.stringify((tr||[]).map(t=>[t.id||t.title,t.manual?1:0,t.plan&&t.plan.style,t.opts&&JSON.stringify(t.opts)])); }
+async function cloudPushVersion(name, plId, tr, reason, theme){
+  if(!tr || !tr.length) return;
+  try{
+    await fetch(SPIN_VER_URL,{method:'POST',headers:Object.assign({},SPIN_SYNC_HEADERS,{'Content-Type':'application/json',Prefer:'return=minimal'}),
+      body:JSON.stringify({playlist_id:plId,name:name||'',song_count:tr.length,titles:tr.slice(0,6).map(t=>t.title).join(' · '),reason:reason||'',data:{name:name||'',theme:theme||'',tracks:tr}})});
+  }catch(e){ console.warn('version push failed',e); }
+}
+// Saves a snapshot of `tr` as an older version, throttled so a burst of edits is one version.
+function maybeVersion(p, oldTracks, newTracks, force, reason){
+  if(!p || !oldTracks || !oldTracks.length) return;
+  const sig = songSig(oldTracks);
+  if(lastVerSig[p.id]===sig) return;
+  const now = Date.now(), man = a=>a.filter(t=>t.manual).length;
+  const big = force || (newTracks && (newTracks.length<oldTracks.length || man(newTracks)<man(oldTracks)));
+  if(!big && now-(lastVerAt[p.id]||0) < 180000) return;
+  lastVerAt[p.id] = now; lastVerSig[p.id] = sig;
+  cloudPushVersion(p.name, p.id, JSON.parse(JSON.stringify(oldTracks)), reason||'Auto', p.theme);
+}
+function fmtWhen(iso){ const d=new Date(iso); return d.toLocaleDateString([],{month:'short',day:'numeric'})+' at '+d.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'}); }
+let histCtx = null;
+async function openHistory(plId){
+  histCtx = {plId}; const list = $('#histList');
+  $('#histTitle').textContent = plId ? 'Older versions of this class' : 'Recently deleted';
+  $('#histNote').textContent = plId ? 'Pick a version to bring back. The current one is kept as a version too, so you can switch back.' : 'Deleted classes that still have a saved copy. Restore puts one back as a new class.';
+  list.innerHTML = '<p class="note">Loading…</p>'; $('#histDlg').showModal();
+  try{
+    const q = plId ? '&playlist_id=eq.'+encodeURIComponent(plId) : '';
+    const r = await fetch(SPIN_VER_URL+'?select=id,playlist_id,name,song_count,titles,reason,saved_at&song_count=gt.0&order=saved_at.desc&limit='+(plId?40:300)+q,{headers:SPIN_SYNC_HEADERS});
+    if(!r.ok) throw new Error(r.status);
+    let rows = await r.json();
+    if(!plId){
+      const live = new Set(store.playlists.map(p=>p.id)), seen = new Set();
+      rows = rows.filter(v=>{ if(live.has(v.playlist_id) || seen.has(v.playlist_id)) return false; seen.add(v.playlist_id); return true; });
+    }
+    if(!rows.length){ list.innerHTML = '<p class="note">'+(plId?'No older versions yet — they appear as you keep editing.':'Nothing recently deleted.')+'</p>'; return; }
+    list.innerHTML = rows.map(v=>`<div class="hrow"><div><b>${esc(v.name||'Untitled')}</b> &middot; ${v.song_count} song${v.song_count===1?'':'s'}<small>${esc(fmtWhen(v.saved_at))}${v.reason?' &middot; '+esc(v.reason):''}</small><small>${esc((v.titles||'').slice(0,110))}</small></div><div class="hacts">${plId?`<button class="btn primary" data-rv="${v.id}">Restore</button>`:''}<button class="btn" data-rc="${v.id}">${plId?'As copy':'Restore'}</button></div></div>`).join('');
+  }catch(e){ list.innerHTML = '<p class="note">Couldn\'t load versions right now ('+esc(String(e.message||e))+').</p>'; }
+}
+async function restoreVersion(verId, asNew){
+  let row;
+  try{
+    const r = await fetch(SPIN_VER_URL+'?id=eq.'+encodeURIComponent(verId)+'&select=name,data',{headers:SPIN_SYNC_HEADERS});
+    row = (await r.json())[0]; if(!row||!row.data) throw new Error('missing');
+  }catch(e){ toast('Couldn\'t load that version.'); return; }
+  const tr = row.data.tracks||[];
+  if(!asNew && store.currentId && histCtx && histCtx.plId===store.currentId){
+    const p = store.playlists.find(x=>x.id===store.currentId);
+    if(p) maybeVersion(p, store.tracks, tr, true, 'Before restoring an older version');
+    undoStack.push(JSON.stringify(store.tracks)); redoStack.length = 0;
+    histApply(JSON.stringify(tr)); flushAutoSave();
+    toast('Restored. Undo brings the previous one back.');
+  } else {
+    const now = Date.now(), p = {id:plId(), name:(row.name||row.data.name||'Restored class')+(asNew&&histCtx&&histCtx.plId?' (copy)':''), tracks:JSON.parse(JSON.stringify(tr)), createdAt:now, updatedAt:now, theme:row.data.theme||''};
+    store.playlists.push(p); cloudPushPlaylist(p); save();
+    toast('Restored "'+p.name+'" as a new class.'); try{renderLibrary();}catch(_){}
+  }
+  $('#histDlg').close();
+}
 function save(){
   ensureDraftPlaylist();
+  histCapture();
   try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){ if(!quotaWarned){ quotaWarned = true; try{ toast('Browser storage is full — changes may not survive a reload. Tell Claude.'); }catch(_){} } }
   // Ian: "I'd prefer playlists to automatically save everything there is a change instead
   // of manually saving it every time... I have a feeling we'll forget to save and it'll all
@@ -1754,6 +1898,7 @@ function flushAutoSave(){
   const p = store.playlists.find(x=>x.id===store.currentId); if(!p) return;
   const snap = JSON.stringify(store.tracks);
   if(snap === JSON.stringify(p.tracks)) return; // nothing actually changed
+  maybeVersion(p, p.tracks, store.tracks, false, 'Auto');
   p.tracks = JSON.parse(snap); p.updatedAt = Date.now();
   try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
   cloudPushPlaylist(p);
@@ -2724,6 +2869,9 @@ $('#classLen').onchange = ()=>{ store.classLen = clamp(+$('#classLen').value||45
 $('#btnArc').onclick = ()=>{
   const ts = tracks();
   if(ts.length<3){ toast('Add at least three songs and the arc has something to shape.'); return; }
+  const handN = ts.filter(t=>t.manual).length;
+  if(handN && !confirm('Build the arc will re-time and re-order your songs, including '+handN+' you timed by hand. You can bring them back with Undo or Older versions.\n\nBuild the arc anyway?')) return;
+  { const pp = store.playlists.find(x=>x.id===store.currentId); if(pp) maybeVersion(pp, pp.tracks.length?pp.tracks:ts, [], true, 'Before Build the arc'); }
   const ordered = arcOrder(ts);
   ts.length = 0; ordered.forEach(t=>ts.push(t));
   ts.forEach(t=>{ t.manual = false; });   // the arc owns the whole class
@@ -2738,6 +2886,18 @@ $('#btnArc').onclick = ()=>{
     toast('Arc built — builds to '+peak+' second-to-last, then cools down. '+fmt(total)+' for a '+store.classLen+'-minute class.');
   }
 };
+$('#btnUndo').onclick = histUndo; $('#btnRedo').onclick = histRedo;
+$('#btnHist').onclick = ()=>{ if(!store.currentId){ toast('Add a song first — the class saves itself and keeps versions from there.'); return; } openHistory(store.currentId); };
+$('#btnDeleted').onclick = ()=>openHistory(null);
+$('#histClose').onclick = ()=>$('#histDlg').close();
+$('#histList').addEventListener('click',e=>{ const b=e.target.closest('button'); if(!b) return; if(b.dataset.rv) restoreVersion(b.dataset.rv,false); else if(b.dataset.rc) restoreVersion(b.dataset.rc,true); });
+document.addEventListener('keydown',e=>{
+  if(!(e.ctrlKey||e.metaKey) || e.key.toLowerCase()!=='z') return;
+  const el = e.target; if(el && (el.tagName==='INPUT'||el.tagName==='TEXTAREA'||el.isContentEditable)) return;
+  if(document.querySelector('dialog[open]')) return;
+  const cr = document.getElementById('creator'); 
+  e.preventDefault(); e.shiftKey ? histRedo() : histUndo();
+});
 var lastRecs = [], recsOpen = false;   // var: renderTracks reads recsOpen and runs before this line
 function recsHeadline(ts){
   const th = store.theme ? ' Leaning towards “'+store.theme+'”.' : '';
@@ -3013,7 +3173,7 @@ function seedCustomSegsFromCurrentPlan(){
   const plan = buildPlan(temp,{...o,style:o.style==='custom'?origStyle:o.style});
   customSegs = [];
   if(plan.off>0) customSegs.push({z:0,dur:plan.off});
-  plan.segs.forEach(s=>customSegs.push({z:s.z,dur:Math.max(1,s.end-s.start)}));
+  plan.segs.forEach(s=>customSegs.push({z:s.z,dur:Math.max(1,s.end-s.start),effect:s.effect||null}));
   if(!customSegs.length) customSegs.push({z:0,dur:temp.dur||210});
 }
 chipGroup($('#fStyle'),[['auto','Quick pick'],...Object.entries(STYLES)],v=>{
@@ -3141,12 +3301,13 @@ function splitBlockAt(idx){
   const segs = fsEnsureCustom(), s = segs[idx];
   if(!s || s.dur < 10) return; // need at least two 5s halves
   const half = Math.round(s.dur/2);
-  segs.splice(idx,1,{z:s.z,dur:half},{z:s.z,dur:s.dur-half});
+  segs.splice(idx,1,{z:s.z,dur:half,effect:s.effect||null},{z:s.z,dur:s.dur-half,effect:s.effect||null});
   syncDialog();
 }
 function syncDialog(){
   const {temp,o} = dialogState();
-  $('#lGoal').hidden = o.style==='recover' || o.style==='custom';
+  $('#lGoal').hidden = o.style==='recover' || o.style==='custom' || o.style==='interval';
+  { const cc = $('#fStyle').querySelector('.chip[data-v="custom"]'); if(cc){ const nm = o.style==='custom' ? styleLabel(o) : 'Custom'; if(cc.textContent!==nm) cc.textContent = nm; } }
   $('#lTT').hidden = o.style!=='timetrial';
   $('#lWork').hidden = o.style!=='interval';
   if(!wrTouched && o.style==='interval'){ const g = wrDefaults(); $('#fWork').value = g.work; $('#fRest').value = g.rest; }
@@ -3159,7 +3320,7 @@ function syncDialog(){
   if(!dT.offsetManual) $('#fOff').value = Math.round(plan.off);
   $('#offNote').textContent = dT.offsetManual ? 'Set by you.' : (plan.off>0 ? 'Chosen automatically for a time trial.' : 'Automatic.');
   let info = STYLES[plan.style]+', effort '+e.level+' of 5.';
-  if(o.style==='custom') info = (styleLabel(o)||'Customized')+', effort '+e.level+' of 5 — '+fmt(plan.D)+' total.';
+  if(o.style==='custom') info = (styleLabel(o)||'Custom')+', effort '+e.level+' of 5 — '+fmt(plan.D)+' total.';
   else {
     if(plan.off>0) info += ' Starts at '+fmt(plan.off)+(plan.style==='timetrial' && !temp.offsetManual ? ' so the intro plays first.' : '.');
     info += ' Steps snap to '+Math.round(unitSec(temp.bpm))+'-second phrases so changes land on the music.';
@@ -3184,17 +3345,21 @@ $('#fStrip').addEventListener('click',e=>{
     // Already fully hand-timed — cycling a block's color here is just one more edit on
     // top of edits already made, so it stays inside customSegs same as before.
     const segs = fsEnsureCustom();
-    segs[idx].z = (segs[idx].z+1)%ZONES.length;
+    const sg = segs[idx]; if(!sg) return;
+    const curC = sg.effect || sg.z, posC = COLOR_CYCLE.indexOf(curC);
+    const nx = COLOR_CYCLE[(posC<0?0:posC+1) % COLOR_CYCLE.length];
+    if(nx==='fire'||nx==='tunnel'){ sg.effect = nx; } else { sg.effect = null; sg.z = nx; }
   } else {
     // A plain color click on an otherwise-automatic style: a small tweak that keeps the
     // song's real style/timing/goal intact, cycling White→Blue→Green→Yellow→Red→Ring of
     // fire→Tunnel. Deliberately does NOT call fsEnsureCustom — that's what would freeze it
     // into full Custom and earn the "(edited)" label Ian didn't want for a tweak this small.
     const plan = buildPlan(dialogState().temp, o);
-    const seg = plan.segs[idx]; if(!seg) return;
+    const si = idx - (plan.off>0 ? 1 : 0);   // the strip's first block is the lead-in when there is one
+    const seg = plan.segs[si]; if(!seg) return;
     const cur = seg.effect || seg.z;
     const pos = COLOR_CYCLE.indexOf(cur);
-    fsColorOverrides[idx] = COLOR_CYCLE[(pos<0?0:pos+1) % COLOR_CYCLE.length];
+    fsColorOverrides[si] = COLOR_CYCLE[(pos<0?0:pos+1) % COLOR_CYCLE.length];
   }
   syncDialog();
 });
@@ -3268,7 +3433,7 @@ $('#fResetCustom').onclick = ()=>{
 function autoSaveTiming(id, title, segs){
   if(!segs.length) return;
   const total = segs.reduce((a,s)=>a+s.dur,0) || 1;
-  const frac = segs.map(s=>({z:s.z, frac:s.dur/total}));
+  const frac = segs.map(s=>({z:s.z, effect:s.effect||null, frac:s.dur/total}));
   // Re-saving the same song's timing just updates its existing entry in place, rather than
   // piling up duplicates every time that song gets tweaked and re-applied.
   store.timingPresets = store.timingPresets.filter(p=>p.id!==id && p.name!==title);
@@ -3283,7 +3448,7 @@ function applySavedTimingIfAny(t){
   const preset = (store.timingPresets||[]).find(p=>p.id===t.id);
   if(!preset || !preset.frac.length) return false;
   const total = t.dur || 210;
-  const segs = preset.frac.map(f=>({z:f.z, dur:Math.max(5,Math.round(f.frac*total))}));
+  const segs = preset.frac.map(f=>({z:f.z, effect:f.effect||null, dur:Math.max(5,Math.round(f.frac*total))}));
   const drift = total - segs.reduce((a,s)=>a+s.dur,0);
   segs[segs.length-1].dur = Math.max(5, segs[segs.length-1].dur + drift);
   t.opts = {style:'custom', goal:'balanced', customSegs:segs, customBase:t.opts && t.opts.style!=='custom' ? t.opts.style : null};
@@ -3306,7 +3471,7 @@ $('#fLoadTiming').onchange = e=>{
   const segs = fsEnsureCustom();
   const total = fsTotalSec();
   segs.length = 0;
-  preset.frac.forEach(f=>segs.push({z:f.z, dur:Math.max(5, Math.round(f.frac*total))}));
+  preset.frac.forEach(f=>segs.push({z:f.z, effect:f.effect||null, dur:Math.max(5, Math.round(f.frac*total))}));
   // rounding can drift the sum off the song's real total by a second or two — true it up on
   // the last block so the bar always adds to exactly the song length.
   const drift = total - segs.reduce((a,s)=>a+s.dur,0);
@@ -3381,7 +3546,7 @@ $('#fMarkHere').onclick = ()=>{
   if(idx<0){ toast('Play the track a bit first, then try again.'); return; }
   if(localOffset<5 || segs[idx].dur-localOffset<5){ toast('Too close to an existing boundary — move the playhead a little further in.'); return; }
   const s = segs[idx];
-  segs.splice(idx,1,{z:s.z,dur:Math.round(localOffset)},{z:s.z,dur:Math.round(s.dur-localOffset)});
+  segs.splice(idx,1,{z:s.z,dur:Math.round(localOffset),effect:s.effect||null},{z:s.z,dur:Math.round(s.dur-localOffset),effect:s.effect||null});
   syncDialog();
 };
 // A rough onset detector, not real chorus/section recognition: 1s energy windows, smoothed,
@@ -4149,7 +4314,8 @@ $('#plList').addEventListener('click', e=>{
   else if(b.dataset.edit) loadPlaylistIntoCreator(b.dataset.edit);
   else if(b.dataset.del){
     const p = store.playlists.find(x=>x.id===b.dataset.del);
-    if(p && confirm('Delete "'+p.name+'"? This can\'t be undone.')){
+    if(p && confirm('Delete "'+p.name+'"? You can bring it back from Recently deleted.')){
+      maybeVersion(p, p.tracks, [], true, 'Deleted');
       store.playlists = store.playlists.filter(x=>x.id!==b.dataset.del);
       if(store.currentId===b.dataset.del){ store.currentId = null; store.tracks = []; $('#plName').value = ''; $('#plSavedNote').hidden = true; renderTracks(); }
       save(); renderLibrary();
