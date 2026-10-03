@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0e14">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Spin Widget · Teacher view</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --disp:"Big Shoulders Display","Barlow Condensed","Arial Narrow",Impact,sans-serif;
+  --body:'Outfit',system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --bg:#0b0e14; --ink:#ffffff;
+  --card:rgba(8,12,20,.84);
+  --nextc:#2f7dff; --nexti:#ffffff;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;height:100%;background:#0b0e14;font-family:var(--body);-webkit-font-smoothing:antialiased;
+  overscroll-behavior:none;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+#app{
+  height:100vh;height:100dvh;display:flex;flex-direction:column;gap:10px;overflow:hidden;
+  padding:max(10px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));
+  background:var(--bg);color:var(--ink);transition:background-color .25s ease;
+}
+#app[data-ink=light]{--ink:#ffffff}
+#app[data-ink=light] .onzone{text-shadow:0 2px 5px rgba(0,0,0,.45),0 0 18px rgba(0,0,0,.25)}
+
+/* ---------- top bar ---------- */
+#top{display:flex;align-items:center;gap:10px;min-height:32px;font-weight:700;font-size:14px;letter-spacing:.06em;text-transform:uppercase}
+#dot{flex:none;width:12px;height:12px;border-radius:50%;background:#7a8499;box-shadow:0 0 0 2px rgba(0,0,0,.3)}
+#dot[data-s=ok]{background:#27d36b}
+#dot[data-s=stale]{background:#ffb020;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.35}}
+#songNo{white-space:nowrap}
+#status{opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#paused{margin-left:auto;background:var(--card);color:#fff;border-radius:999px;padding:4px 12px;font-size:13px;border:1px solid rgba(255,255,255,.25)}
+#fsBtn{margin-left:auto;flex:none;background:var(--card);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:10px;width:36px;height:32px;font-size:18px;line-height:1;cursor:pointer;padding:0}
+#paused:not([hidden]) + #fsBtn{margin-left:0}
+
+/* ---------- live view ---------- */
+#live{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px}
+.card{background:var(--card);color:#fff;border:1px solid rgba(255,255,255,.16);border-radius:16px;padding:10px 14px}
+.card .k{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#aeb8cb}
+#wtype{text-align:center;font-weight:800;font-size:clamp(18px,5.6vw,27px);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:9px 14px}
+
+#zone{flex:1 1 0;min-height:0;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:2px;container-type:size}
+#zone > *{flex:none}
+#zone.flash{animation:flash .4s ease-out}
+@keyframes flash{0%{transform:scale(1.07);filter:brightness(1.35)}100%{transform:none;filter:none}}
+#zoneName{width:100%;overflow-x:clip;white-space:nowrap;font-family:var(--disp);font-weight:900;text-transform:uppercase;line-height:.95;
+  font-size:min(24vw,12dvh)}
+#zoneSub{font-weight:700;font-size:clamp(14px,4.2vw,22px);opacity:.92;min-height:1.2em}
+#timer{font-family:var(--disp);font-weight:800;line-height:.95;font-variant-numeric:tabular-nums;font-size:min(32vw,15dvh);margin-top:2px}
+#timerCap{font-weight:700;font-size:clamp(11px,3.3vw,17px);letter-spacing:.09em;text-transform:uppercase;opacity:.85}
+@supports (container-type:size){
+  #zoneName{font-size:min(29cqw,26cqh)}
+  #zoneSub{font-size:clamp(13px,5.6cqh,23px)}
+  #timer{font-size:min(38cqw,36cqh)}
+  #timerCap{font-size:clamp(11px,4.3cqh,17px)}
+}
+#app.paused #timer{opacity:.55}
+#stepBar{width:min(86%,420px);height:9px;border-radius:99px;background:rgba(0,0,0,.22);overflow:hidden;margin-top:6px}
+#stepBarFill{display:block;height:100%;width:0;background:var(--ink);opacity:.7;border-radius:99px}
+
+#next{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:10px 14px}
+#nextSw{width:54px;height:54px;border-radius:12px;border:2px solid rgba(255,255,255,.85);background:#2f7dff}
+#nextName{font-family:var(--disp);font-weight:900;font-size:clamp(28px,9vw,44px);line-height:1;text-transform:uppercase}
+#nextSub{font-size:clamp(13px,3.7vw,17px);color:#cdd5e4;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#nextFor{font-family:var(--disp);font-weight:800;font-size:clamp(22px,7vw,32px);text-align:right;line-height:1}
+#nextFor small{display:block;font-family:var(--body);font-size:11px;letter-spacing:.1em;color:#aeb8cb;font-weight:700;text-transform:uppercase}
+#nextTxt{min-width:0}
+#next.hot{background:var(--nextc);color:var(--nexti);border-color:#fff;animation:pulse .7s ease-in-out infinite alternate;box-shadow:0 0 0 3px rgba(255,255,255,.7)}
+#next.hot .k,#next.hot #nextSub,#next.hot #nextFor small{color:var(--nexti);opacity:.85}
+#next.hot #nextSw{border-color:var(--nexti)}
+@keyframes pulse{from{transform:scale(1)}to{transform:scale(1.025)}}
+
+#song{padding:10px 14px 12px}
+#songRow{display:flex;align-items:baseline;gap:8px}
+#songLeft{font-family:var(--disp);font-weight:800;font-size:clamp(30px,9.5vw,46px);line-height:1;font-variant-numeric:tabular-nums}
+#songRow span{color:#aeb8cb;font-weight:600;font-size:clamp(13px,3.8vw,17px)}
+#songTotal{margin-left:auto}
+#songBar{position:relative;height:14px;border-radius:8px;overflow:hidden;margin:8px 0 6px;background:#2b3344}
+#songPath{position:absolute;inset:0}
+#songPath i{position:absolute;top:0;bottom:0}
+#songDone{position:absolute;top:0;bottom:0;left:0;width:0;background:rgba(8,12,20,.6)}
+#songHead{position:absolute;top:-2px;bottom:-2px;width:3px;margin-left:-1px;background:#fff;box-shadow:0 0 4px rgba(0,0,0,.6);left:0}
+#songTitle{font-size:clamp(13px,3.7vw,16px);color:#cdd5e4;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+#up{padding:9px 14px}
+#upTitle{font-weight:800;font-size:clamp(16px,4.8vw,21px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+#upType{font-size:clamp(13px,3.8vw,16px);color:#cdd5e4;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#up.none #upTitle{color:#cdd5e4;font-weight:600}
+
+#app.lost #live{opacity:.5}
+
+/* ---------- waiting view ---------- */
+#wait{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;padding:0 10px}
+#waitMsg{font-family:var(--disp);font-weight:900;text-transform:uppercase;font-size:min(14vw,9dvh);line-height:1}
+#waitSub{color:#aeb8cb;font-size:clamp(15px,4.2vw,19px);line-height:1.45;max-width:30em}
+#codeForm{display:flex;gap:8px}
+#codeIn{background:#1e2532;color:#fff;border:1px solid #2b3344;border-radius:12px;padding:12px 14px;font:700 20px var(--body);letter-spacing:.14em;text-transform:uppercase;width:11em;text-align:center}
+.btn{background:#1e2532;color:#fff;border:1px solid #2b3344;border-radius:12px;padding:12px 16px;font:700 16px var(--body);cursor:pointer}
+.btn.go{background:#2fd07a;color:#06210f;border:0}
+.linkbtn{background:none;border:0;color:#7fa8ff;font:600 15px var(--body);cursor:pointer;text-decoration:underline;padding:6px}
+
+@media (prefers-reduced-motion:reduce){#dot[data-s=stale],#next.hot,#zone.flash{animation:none}}
+</style>
+</head>
+<body>
+<main id="app" data-ink="light">
+  <header id="top">
+    <i id="dot" data-s="idle"></i>
+    <span id="songNo"></span>
+    <span id="status"></span>
+    <span id="paused" hidden>Paused</span>
+    <button id="fsBtn" type="button" aria-label="Full screen" title="Full screen">&#x26F6;</button>
+  </header>
+
+  <section id="live" hidden>
+    <div class="card" id="wtype"></div>
+
+    <div id="zone">
+      <div id="zoneName" class="onzone"></div>
+      <div id="zoneSub" class="onzone"></div>
+      <div id="timer" class="onzone">0:00</div>
+      <div id="timerCap" class="onzone"></div>
+      <div id="stepBar"><i id="stepBarFill"></i></div>
+    </div>
+
+    <div class="card" id="next">
+      <span id="nextSw"></span>
+      <div id="nextTxt">
+        <div class="k" id="nextK">Next</div>
+        <div id="nextName"></div>
+        <div id="nextSub"></div>
+      </div>
+      <div id="nextFor"><small>for</small><b id="nextForV"></b></div>
+    </div>
+
+    <div class="card" id="song">
+      <div id="songRow"><b id="songLeft">0:00</b><span>left</span><span id="songTotal"></span></div>
+      <div id="songBar"><div id="songPath"></div><i id="songDone"></i><i id="songHead"></i></div>
+      <div id="songTitle"></div>
+    </div>
+
+    <div class="card" id="up">
+      <div class="k" id="upK">Up next</div>
+      <div id="upTitle"></div>
+      <div id="upType"></div>
+    </div>
+  </section>
+
+  <section id="wait">
+    <div id="waitMsg">Teacher view</div>
+    <div id="waitSub"></div>
+    <form id="codeForm" hidden>
+      <input id="codeIn" type="text" maxlength="16" placeholder="CODE" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Class code">
+      <button class="btn go" type="submit">Connect</button>
+    </form>
+    <button class="linkbtn" id="chg" type="button" hidden>Use a different code</button>
+  </section>
+</main>
+
+<script>
+(() => {
+'use strict';
+
+/* ======================================================================
+   Spin Widget — Teacher view (phone).
+   The class laptop publishes the class plan (colors, timings, songs) and its playback state
+   under a short room code. This page only READS that and counts time locally, so it keeps ticking
+   smoothly and works through a brief wifi blip. Backend: Supabase RPCs spin_live_get / spin_live_put
+   (table spin_live has RLS on with no policies — only those two functions can touch it).
+   ====================================================================== */
+const SUPA_URL = 'https://txkmwsnvtwobhrdrablw.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InR4a213c252dHdvYmhyZHJhYmx3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwOTY0MjQsImV4cCI6MjA5ODY3MjQyNH0.S4gQFyfNUhcUbIh5vBaNEj3VxQONTYcuc9VaSCxN74c';
+const LS_KEY = 'spinwidget:teacherphone:v1';
+const POLL_MS = 1000, POLL_ERR_MS = 3000;
+const STALE_AFTER_MS = 7000;      // no successful poll for this long -> amber "reconnecting"
+const LOST_AFTER_MS = 45000;      // ...and this long -> dim everything, say so
+const BEAT_STALE_S = 14;          // laptop heartbeats every ~4s while playing; this much silence = trouble
+const RACE_BG = 'linear-gradient(135deg,#2f7dff,#8bdb1f,#ffd21f,#ff3b3b)';
+const DEFAULT_ZONES = [
+  {n:'White', c:'#f3f5f9', i:'#10141b'},
+  {n:'Blue',  c:'#2f7dff', i:'#ffffff'},
+  {n:'Green', c:'#8bdb1f', i:'#0d1400'},
+  {n:'Yellow',c:'#ffd21f', i:'#191400'},
+  {n:'Red',   c:'#ff3b3b', i:'#ffffff'}
+];
+const $ = s => document.querySelector(s);
+
+/* ---------------- pure logic (also exercised by the tests) ---------------- */
+// Same rounding as the ride screen on the laptop: countdowns round UP, totals round down.
+const fmtDown = s => { s = Math.max(0,Math.ceil(s-0.001)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+const fmt = s => { s = Math.max(0,Math.floor(s)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+
+function zoneOf(plan,z){
+  const Z = plan && plan.zones && plan.zones[z];
+  return Z || DEFAULT_ZONES[z] || DEFAULT_ZONES[0];
+}
+// A step's own end, with the song's real length as the ceiling for the last step.
+function segEnd(segs,i,dur){ const s = segs[i]; return (i===segs.length-1 && dur>0) ? Math.min(s.b,dur) : s.b; }
+function colorChanged(a,b){ return a.z!==b.z || (a.e||null)!==(b.e||null) || !!a.r!==!!b.r; }
+function levelOf(s){ return s.r ? 'Race' : 'Level '+((s.z|0)+1); }
+function describe(plan,s,span){
+  const Z = zoneOf(plan,s.z|0);
+  return {
+    name: s.n || Z.n, z: s.z|0, race: !!s.r, effect: s.e||null, label: s.l||'',
+    level: levelOf(s), sub: [s.l, s.r ? '' : levelOf(s)].filter(Boolean).join(' \u00b7 '),
+    color: s.r ? RACE_BG : Z.c, ink: s.r ? '#ffffff' : Z.i, span: span
+  };
+}
+
+// Everything the screen needs for one instant: which song/step we're in, what's next and when,
+// and the next song. Pure — no DOM, no clocks.
+function computeView(plan,cur,pos){
+  const songs = (plan && plan.songs) || [];
+  if(!songs.length) return null;
+  cur = Math.max(0,Math.min(songs.length-1,cur|0));
+  const song = songs[cur];
+  const segs = (song.s && song.s.length) ? song.s : [{a:0,b:+song.d||0,z:0,n:'White',l:''}];
+  const dur = Math.max(0,+song.d || 0);
+  pos = Math.max(0,+pos||0); if(dur>0) pos = Math.min(pos,dur);
+
+  let i = segs.findIndex(s => pos>=s.a && pos<s.b);
+  if(i<0) i = pos<segs[0].a ? 0 : segs.length-1;
+  const last = i===segs.length-1;
+  const end = segEnd(segs,i,dur);
+  const remain = Math.max(0,end-pos);
+  const cd = describe(plan,segs[i],Math.max(0.001,end-segs[i].a));
+
+  let nxt = null, newSong = false;
+  if(!last){ const e2 = segEnd(segs,i+1,dur); nxt = describe(plan,segs[i+1],Math.max(0,e2-segs[i+1].a)); }
+  else if(songs[cur+1]){
+    const ns = songs[cur+1], nsegs = (ns.s && ns.s.length) ? ns.s : [{a:0,b:+ns.d||0,z:0,n:'White',l:''}];
+    const e2 = segEnd(nsegs,0,Math.max(0,+ns.d||0));
+    nxt = describe(plan,nsegs[0],Math.max(0,e2-nsegs[0].a)); newSong = true;
+  }
+  // Same heads-up windows as the ride screen: 10s for a color change, 30s before a race.
+  const hot = !!nxt && colorChanged(segs[i], newSong ? ((songs[cur+1].s||[])[0] || {z:0}) : segs[i+1]) && remain <= (nxt.race ? 30 : 10);
+
+  const ns = songs[cur+1] || null;
+  return {
+    cur, songNo:cur+1, songCount:songs.length, segIdx:i, segKey:cur+':'+i,
+    type: song.w || '', title: song.t || '',
+    seg: cd, remain, stepFrac: Math.min(1,Math.max(0,(pos-segs[i].a)/cd.span)),
+    next: nxt, newSong, hot,
+    songLeft: Math.max(0,dur-pos), songTotal: dur, songFrac: dur>0 ? Math.min(1,pos/dur) : 0,
+    up: ns ? {title:ns.t||'', type:ns.w||'', dur:+ns.d||0} : null,
+    isLastSong: !ns
+  };
+}
+
+/* ---------------- state + sync ---------------- */
+const state = {
+  code: null, plan: null, v: null, st: null, exists: false, err: false,
+  lastOk: 0, age: 0, busy: false,
+  base: null,              // {cur,pos,at,playing}: our local model of the laptop's playback position
+  staleSince: 0, pollT: 0, pathKey: '', lastSeg: null
+};
+
+function readCode(){
+  let c = null;
+  try{ c = new URLSearchParams(location.search).get('c'); }catch(e){}
+  if(!c){ try{ c = (JSON.parse(localStorage.getItem(LS_KEY)||'null')||{}).code; }catch(e){} }
+  return validCode(c) ? String(c).toUpperCase() : null;
+}
+function validCode(c){ return /^[A-Za-z0-9]{4,16}$/.test(String(c||'')); }
+function rememberCode(c){ try{ localStorage.setItem(LS_KEY, JSON.stringify({code:c})); }catch(e){} }
+
+function applyBase(cur,est,playing,tRecv){
+  const b = state.base;
+  if(b && b.cur===cur && b.playing===playing && playing){
+    // Same song, still playing: blend toward the new estimate instead of jumping, so the
+    // seconds on screen don't hiccup every time a poll lands.
+    const nowPos = b.pos + (tRecv-b.at)/1000, diff = est - nowPos;
+    if(Math.abs(diff) < 0.75){ state.base = {cur,pos:nowPos+diff*0.4,at:tRecv,playing}; return; }
+  }
+  state.base = {cur,pos:est,at:tRecv,playing};
+}
+function ingest(j,oneWay,tRecv){
+  if(!j){ state.exists = false; state.st = null; return; }
+  state.exists = true;
+  if(j.plan){ state.plan = j.plan; state.v = j.v; state.pathKey = ''; }
+  const st = j.st || {}; state.st = st;
+  state.age = Math.max(0,+j.age||0);
+  const est = (+st.pos||0) + (st.playing ? state.age + oneWay : 0);
+  applyBase(st.cur|0,est,!!st.playing,tRecv);
+}
+async function poll(){
+  clearTimeout(state.pollT);
+  if(!state.code || state.busy){ return; }
+  state.busy = true;
+  const t0 = performance.now();
+  let ok = false;
+  try{
+    const ctl = new AbortController(), to = setTimeout(()=>ctl.abort(),4500);
+    const r = await fetch(SUPA_URL+'/rest/v1/rpc/spin_live_get',{
+      method:'POST', cache:'no-store', signal:ctl.signal,
+      headers:{'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY},
+      body:JSON.stringify({p_code:state.code,p_have:state.v})
+    });
+    clearTimeout(to);
+    if(!r.ok) throw new Error('http '+r.status);
+    const j = await r.json(), t1 = performance.now();
+    state.lastOk = t1; state.err = false; ok = true;
+    ingest(j,(t1-t0)/2000,t1);
+  }catch(e){ state.err = true; }
+  state.busy = false;
+  state.pollT = setTimeout(poll, ok ? POLL_MS : POLL_ERR_MS);
+}
+
+/* ---------------- rendering ---------------- */
+const cache = {};
+function setText(id,v){ if(cache[id]!==v){ cache[id]=v; const el = document.getElementById(id); if(el) el.textContent = v; } }
+function setProp(key,fn,val){ if(cache[key]!==val){ cache[key]=val; fn(val); } }
+function fitName(){
+  const el = $('#zoneName'); if(!el) return;
+  el.style.fontSize = '';
+  let size = parseFloat(getComputedStyle(el).fontSize) || 80, guard = 0;
+  while(el.scrollWidth > el.clientWidth+1 && size > 26 && guard++ < 40){ size -= 4; el.style.fontSize = size+'px'; }
+}
+function pathHTML(plan,songIdx){
+  const song = plan.songs[songIdx]; if(!song) return '';
+  const total = Math.max(1,+song.d||1), segs = (song.s && song.s.length) ? song.s : [{a:0,b:total,z:0}];
+  return segs.map(s=>{
+    const left = Math.min(100,Math.max(0,s.a/total*100)), w = Math.max(0,Math.min(100-left,(Math.min(s.b,total)-s.a)/total*100+0.15));
+    const bg = s.r ? RACE_BG : zoneOf(plan,s.z|0).c;
+    return '<i style="left:'+left.toFixed(2)+'%;width:'+w.toFixed(2)+'%;background:'+bg+'"></i>';
+  }).join('');
+}
+
+function setScreen(which){
+  $('#live').hidden = which!=='live'; $('#wait').hidden = which!=='wait';
+  const app = $('#app');
+  if(which==='wait'){
+    app.style.setProperty('--bg','#0b0e14'); app.style.setProperty('--ink','#ffffff'); app.dataset.ink = 'light';
+    delete cache.bg; delete cache.ink;   // so the live view repaints its zone color when it comes back
+  }
+}
+
+function linkInfo(now){
+  const since = now - state.lastOk;
+  const playing = !!(state.st && state.st.playing);
+  const beatLate = playing && state.exists && (state.age + (now-state.lastOk)/1000) > BEAT_STALE_S;
+  const stale = !state.lastOk || state.err || since > STALE_AFTER_MS || beatLate;
+  return {stale, since, beatLate};
+}
+
+function renderWait(now){
+  setScreen('wait');
+  const link = linkInfo(now);
+  let msg, sub, form = false, chg = false;
+  if(!state.code){ msg = 'Enter class code'; sub = 'On the class laptop, tap Teacher view to get the code (or scan its QR code).'; form = true; }
+  else if(!state.lastOk && !state.err){ msg = 'Connecting\u2026'; sub = 'Code '+state.code; chg = true; }
+  else if(state.err && !state.exists){ msg = 'Can\u2019t reach the server'; sub = 'Check the wifi \u2014 retrying automatically.'; chg = true; }
+  else if(!state.exists){ msg = 'Not connected yet'; sub = 'On the class laptop, open Teacher view and make sure sharing is on. Code '+state.code+'.'; chg = true; }
+  else if(state.st && state.st.ended){ msg = 'Class finished'; sub = 'Nice work, class.'; chg = true; }
+  else if(state.st && state.st.live && !state.plan){ msg = 'Loading class\u2026'; sub = 'Code '+state.code; chg = true; }
+  else { msg = 'Waiting for class to start'; sub = 'Connected \u00b7 code '+state.code+'. This screen fills in the moment the class begins.'; chg = true; }
+  setText('waitMsg',msg); setText('waitSub',sub);
+  $('#codeForm').hidden = !form; $('#chg').hidden = !chg;
+  setText('songNo',''); setText('status', state.code && link.stale && state.lastOk ? 'Reconnecting\u2026' : '');
+  $('#dot').dataset.s = state.exists && !link.stale ? 'ok' : (state.code && link.stale && state.lastOk ? 'stale' : 'idle');
+  $('#paused').hidden = true;
+}
+
+function renderLive(now){
+  const b = state.base; if(!b){ return renderWait(now); }
+  const link = linkInfo(now);
+  const lost = link.stale && (now - state.lastOk) > LOST_AFTER_MS;
+  let pos = b.pos + (b.playing ? (now-b.at)/1000 : 0);
+  const v = computeView(state.plan,b.cur,pos);
+  if(!v) return renderWait(now);
+
+  setScreen('live');
+  const app = $('#app');
+  app.classList.toggle('lost',lost);
+  $('#dot').dataset.s = link.stale ? 'stale' : 'ok';
+  setText('status', lost ? 'Connection lost \u2014 times may be off' : (link.stale ? (link.beatLate && !state.err ? 'Laptop not responding\u2026' : 'Reconnecting\u2026') : ''));
+  setText('songNo','Song '+v.songNo+' of '+v.songCount);
+  $('#paused').hidden = !!b.playing;
+  app.classList.toggle('paused',!b.playing);
+
+  // Whole screen takes the zone's color, like the ride panel.
+  const s = v.seg;
+  setProp('bg',x=>{ app.style.setProperty('--bg',x); },s.color);
+  setProp('ink',x=>{ app.style.setProperty('--ink',x); app.dataset.ink = (x==='#ffffff') ? 'light' : 'dark'; },s.ink);
+
+  setText('wtype',v.type || 'Workout');
+  const nameChanged = cache.zoneName !== s.name;
+  setText('zoneName',s.name);
+  if(nameChanged) fitName();
+  setText('zoneSub',s.sub);
+  setText('timer',fmtDown(v.remain));
+  setText('timerCap', v.next ? ('until '+v.next.name+(v.newSong?' (next song)':'')) : 'left in the class');
+  $('#stepBarFill').style.width = (v.stepFrac*100).toFixed(1)+'%';
+
+  if(state.lastSeg!==null && state.lastSeg!==v.segKey){
+    const z = $('#zone'); z.classList.remove('flash'); void z.offsetWidth; z.classList.add('flash');
+  }
+  state.lastSeg = v.segKey;
+
+  // Next
+  const nx = v.next, nextEl = $('#next');
+  if(nx){
+    setText('nextK', v.newSong ? 'Next song' : 'Next');
+    setText('nextName',nx.name);
+    setText('nextSub',nx.sub);
+    setProp('nextSw',x=>{ $('#nextSw').style.background = x; },nx.color);
+    setText('nextForV',fmt(nx.span));
+    $('#nextFor').hidden = false;
+    setProp('nextc',x=>{ nextEl.style.setProperty('--nextc',x); },nx.color);
+    setProp('nexti',x=>{ nextEl.style.setProperty('--nexti',x); },nx.ink);
+  } else {
+    setText('nextK','Next'); setText('nextName','End of class'); setText('nextSub','This is the last step');
+    setProp('nextSw',x=>{ $('#nextSw').style.background = x; },'#2b3344');
+    $('#nextFor').hidden = true;
+  }
+  nextEl.classList.toggle('hot',v.hot);
+
+  // Song
+  setText('songLeft',fmtDown(v.songLeft));
+  setText('songTotal','of '+fmt(v.songTotal));
+  setText('songTitle',v.title);
+  const key = state.v+'|'+v.cur;
+  if(state.pathKey!==key){ state.pathKey = key; $('#songPath').innerHTML = pathHTML(state.plan,v.cur); }
+  $('#songDone').style.width = (v.songFrac*100).toFixed(2)+'%';
+  $('#songHead').style.left = (v.songFrac*100).toFixed(2)+'%';
+
+  // Up next song
+  const up = $('#up');
+  if(v.up){ up.classList.remove('none'); setText('upK','Up next'); setText('upTitle',v.up.title); setText('upType',(v.up.type||'Workout')+' \u00b7 '+fmt(v.up.dur)); }
+  else { up.classList.add('none'); setText('upK','Up next'); setText('upTitle','Last song of the class'); setText('upType',''); }
+}
+
+function render(){
+  const now = performance.now();
+  const st = state.st;
+  const showLive = state.code && state.exists && st && st.live && !st.ended && state.plan && state.base;
+  if(showLive) renderLive(now); else renderWait(now);
+}
+
+/* ---------------- boot ---------------- */
+function setCode(c){
+  state.code = c; state.plan = null; state.v = null; state.st = null; state.exists = false; state.base = null;
+  state.lastOk = 0; state.err = false; state.pathKey = ''; state.lastSeg = null;
+  if(c){ rememberCode(c); poll(); }
+  render();
+}
+$('#codeForm').addEventListener('submit',e=>{
+  e.preventDefault();
+  const c = $('#codeIn').value.trim().toUpperCase();
+  if(!validCode(c)){ $('#codeIn').focus(); return; }
+  try{ history.replaceState(null,'',location.pathname+'?c='+c); }catch(err){}
+  setCode(c);
+});
+$('#chg').addEventListener('click',()=>{
+  try{ localStorage.removeItem(LS_KEY); history.replaceState(null,'',location.pathname); }catch(e){}
+  setCode(null);
+});
+$('#fsBtn').addEventListener('click',()=>{
+  try{ if(document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen(); }catch(e){}
+});
+
+// Keep the phone awake while the class runs.
+let wake = null;
+async function keepAwake(){
+  try{ if('wakeLock' in navigator && document.visibilityState==='visible' && !wake){
+    wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release',()=>{ wake = null; });
+  } }catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'){ keepAwake(); if(state.code) poll(); }
+});
+window.addEventListener('online',()=>{ if(state.code) poll(); });
+keepAwake();
+
+window.addEventListener('resize',()=>{ if(cache.zoneName) fitName(); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(()=>{ if(cache.zoneName) fitName(); });
+state.code = readCode();
+if(state.code){ rememberCode(state.code); poll(); }
+render();
+setInterval(render,100);
+
+// Test hooks (harmless in production).
+window.__teacher = {computeView,fmt,fmtDown,state,render,ingest,applyBase,poll,pathHTML,describe};
+})();
+</script>
+</body>
+</html>
