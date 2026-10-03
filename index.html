@@ -1349,18 +1349,87 @@ function syncStatus(kind, detail){
   el.textContent = kind==='ok' ? 'Synced '+t : kind==='busy' ? 'Syncing…' : 'Sync failed — tap to retry';
   el.title = detail || '';
 }
+// ===== Safe sync: never let a stale device overwrite newer work =====
+// Ian (2026-10-03): two devices edited the same class; the older device's save won because
+// "newest timestamp wins" ignores WHAT changed. Now every local copy remembers the cloud version it
+// was based on (baseAt) and the songs it had then (baseKeys). A push first looks at the cloud row;
+// if someone else saved since our base, the two sets of songs are MERGED (three-way, so a song one
+// device deliberately removed stays removed) and both originals are kept as older versions.
+function songKey(t){ return (t.kind||'')+':'+(t.id||t.title||t.uid||''); }
+function keyedSongs(list){ const n={}; return (list||[]).map(t=>{ const k=songKey(t); n[k]=(n[k]||0)+1; return {k:k+'#'+n[k], t}; }); }
+function songKeys(list){ return keyedSongs(list).map(e=>e.k); }
+function mergeTracks(baseKeys, localList, cloudList){
+  const base = new Set(baseKeys||[]), haveBase = !!(baseKeys && baseKeys.length);
+  const L = keyedSongs(localList), C = keyedSongs(cloudList);
+  const cMap = new Map(C.map(e=>[e.k,e.t])), lKeys = new Set(L.map(e=>e.k));
+  const out = [];
+  L.forEach(e=>{
+    const ct = cMap.get(e.k);
+    if(ct === undefined){
+      // we have it, the cloud doesn't: removed over there (only if we both knew it) — unless we hand-timed it
+      if(haveBase && base.has(e.k) && !e.t.manual) return;
+      out.push({k:e.k, t:e.t}); return;
+    }
+    out.push({k:e.k, t:(!e.t.manual && ct.manual) ? ct : e.t});
+  });
+  C.forEach((e,i)=>{
+    if(lKeys.has(e.k)) return;
+    if(haveBase && base.has(e.k)) return;            // we removed it on purpose
+    let at = 0;                                       // goes right after its cloud neighbour
+    for(let j=i-1;j>=0;j--){ const idx = out.findIndex(o=>o.k===C[j].k); if(idx>=0){ at = idx+1; break; } }
+    out.splice(at,0,{k:e.k, t:e.t});
+  });
+  return out.map(o=>o.t);
+}
+async function cloudFetchOne(id){
+  const r = await fetch(SPIN_SYNC_URL+'?id=eq.'+encodeURIComponent(id)+'&select=data,updated_at', { headers: SPIN_SYNC_HEADERS });
+  if(!r.ok) throw new Error('fetch '+r.status);
+  return (await r.json())[0] || null;
+}
+function applyMergedToDraft(p){
+  if(store.currentId===p.id){
+    store.tracks.length = 0; p.tracks.forEach(t=>store.tracks.push(JSON.parse(JSON.stringify(t))));
+    draftRefreshed = true; try{ renderTracks(); }catch(e){}
+  }
+}
 async function cloudPushPlaylist(p){
   syncMarkPending(p.id);
   try{
-    const r = await fetch(SPIN_SYNC_URL, {
-      method: 'POST',
-      headers: Object.assign({}, SPIN_SYNC_HEADERS, {
-        'Content-Type': 'application/json',
-        'Prefer': 'resolution=merge-duplicates'
-      }),
-      body: JSON.stringify({ id: p.id, data: p, updated_at: new Date(p.updatedAt).toISOString() })
-    });
-    if(!r.ok) throw new Error('push '+r.status+' '+(await r.text().catch(()=>'')).slice(0,160));
+    let done = false;
+    for(let attempt=0; attempt<4 && !done; attempt++){
+      const cur = await cloudFetchOne(p.id);
+      if(cur && cur.data && cur.data.deleted){ done = true; break; }   // deleted elsewhere: never resurrect (sync removes our copy)
+      if(cur && cur.data && (cur.data.updatedAt||0) > (p.baseAt||0) &&
+         JSON.stringify(cur.data.tracks||[]) !== JSON.stringify(p.tracks||[])){
+        // someone else saved since we last synced: keep both originals, then merge
+        cloudPushVersion(cur.data.name, p.id, JSON.parse(JSON.stringify(cur.data.tracks||[])), 'Other device, before merge', cur.data.theme);
+        cloudPushVersion(p.name, p.id, JSON.parse(JSON.stringify(p.tracks||[])), 'This device, before merge', p.theme);
+        p.tracks = mergeTracks(p.baseKeys, p.tracks, cur.data.tracks);
+        p.updatedAt = Math.max(Date.now(), (cur.data.updatedAt||0)+1);
+        applyMergedToDraft(p);
+        try{ toast('Combined your changes with ones saved from another device. Nothing was lost.'); }catch(e){}
+      }
+      const body = Object.assign({}, p, {baseAt:undefined, baseKeys:undefined});
+      const iso = new Date(p.updatedAt).toISOString();
+      let r;
+      if(cur){
+        // only overwrite the exact row we just looked at; if it moved in the meantime, look again
+        r = await fetch(SPIN_SYNC_URL+'?id=eq.'+encodeURIComponent(p.id)+'&updated_at=eq.'+encodeURIComponent(cur.updated_at),{
+          method:'PATCH', headers:Object.assign({},SPIN_SYNC_HEADERS,{'Content-Type':'application/json',Prefer:'return=representation'}),
+          body: JSON.stringify({data:body, updated_at:iso})});
+        if(!r.ok) throw new Error('push '+r.status+' '+(await r.text().catch(()=>'')).slice(0,160));
+        const rows = await r.json();
+        if(!rows.length) continue;      // lost a race — retry with fresh cloud data
+      } else {
+        r = await fetch(SPIN_SYNC_URL, {method:'POST',
+          headers:Object.assign({},SPIN_SYNC_HEADERS,{'Content-Type':'application/json',Prefer:'resolution=merge-duplicates'}),
+          body: JSON.stringify({id:p.id, data:body, updated_at:iso})});
+        if(!r.ok) throw new Error('push '+r.status+' '+(await r.text().catch(()=>'')).slice(0,160));
+      }
+      done = true;
+    }
+    if(!done) throw new Error('push kept colliding');
+    p.baseAt = p.updatedAt; p.baseKeys = songKeys(p.tracks);
     if(store.pendingPush) delete store.pendingPush[p.id];
     try{ localStorage.setItem('spinwidget:v1',JSON.stringify(store)); }catch(e){}
     return true;
@@ -1420,9 +1489,10 @@ async function syncPlaylistsWithCloud(){
       }
       if(store.deletedIds[cloudP.id]) continue;               // deleted here — don't resurrect
       const localP = byId.get(cloudP.id);
-      if(!localP){ byId.set(cloudP.id, cloudP); }
+      if(!localP){ cloudP.baseAt = cloudP.updatedAt||0; cloudP.baseKeys = songKeys(cloudP.tracks); byId.set(cloudP.id, cloudP); }
       else if(store.pendingPush[cloudP.id]){ toPush.push(localP); }  // local has unsent edits: they win
       else if((cloudP.updatedAt||0) > (localP.updatedAt||0)){
+        cloudP.baseAt = cloudP.updatedAt||0; cloudP.baseKeys = songKeys(cloudP.tracks);
         byId.set(cloudP.id, cloudP);
         // the open draft was this playlist and had no unsaved changes — pull the new songs in too
         if(store.currentId===cloudP.id && JSON.stringify(store.tracks)===JSON.stringify(localP.tracks)){
@@ -2321,9 +2391,12 @@ function autoPlanClass(list,force){
 }
 
 // ---------- YouTube API loader ----------
-// Embeds are served from youtube-nocookie.com, so what plays in class is not
-// written into whoever's YouTube account happens to be signed in on the laptop.
-const YT_HOST = 'https://www.youtube-nocookie.com';
+// 2026-10-03 (Ian): YouTube started showing ads in class. Privacy-enhanced (youtube-nocookie.com)
+// embeds never recognise the signed-in account, so YouTube Premium's ad-free playback does not apply
+// to them. Embeds now come from www.youtube.com so a Premium account signed in on the laptop skips ads.
+// Trade-off: what plays in class is now recorded in that account's watch history. Embeds with no
+// signed-in Premium account can still show ads; nothing in the page can remove those.
+const YT_HOST = 'https://www.youtube.com';
 let ytPromise = null;
 function loadYT(){
   if(ytPromise) return ytPromise;
@@ -3937,14 +4010,21 @@ function buildSongProgressBar(t){
     } else markEl.hidden = true;
   }
 }
+// Cadence shown as RPM. Ian (2026-10-03): a ~120 BPM song should read about 90-110, not 59.
+// Up to 110 BPM you ride on the beat; from there up to 150 the cadence eases to 80% of the BPM,
+// capped at 110 (118 -> 94, 126 -> 101, 135 -> 108); only very fast songs (150+) ride half-time.
+function cadenceFromBpm(b){
+  b = +b || 0;
+  if(b<=110) return Math.round(b);
+  if(b<150) return Math.min(110, Math.round(b*0.8));
+  return Math.round(b/2);
+}
 async function goToCurrent(){
   const t = tracks()[cur]; if(!t) return;
   videoMode = false;
   anchor = {t:0,at:performance.now()}; ended = false; t._checked = false;
   setText('npTitle',t.title); setText('npIdx','Song '+(cur+1)+' of '+tracks().length);
-  // Cadence reads roughly half the song's BPM once it's fast enough that riding it 1:1
-  // would be an absurd spin — so anything over 120 shows the halved number instead.
-  setText('bpmV',String(t.bpm>=112 ? Math.round(t.bpm/2) : t.bpm));
+  setText('bpmV',String(cadenceFromBpm(t.bpm)));
   $('#pulse').style.setProperty('--beat',(60/t.bpm).toFixed(3)+'s');
   setText('wType', workoutTypeText(t));
 
