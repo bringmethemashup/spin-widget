@@ -4010,14 +4010,11 @@ function buildSongProgressBar(t){
     } else markEl.hidden = true;
   }
 }
-// Cadence shown as RPM. Ian (2026-10-03): a ~120 BPM song should read about 90-110, not 59.
-// Up to 110 BPM you ride on the beat; from there up to 150 the cadence eases to 80% of the BPM,
-// capped at 110 (118 -> 94, 126 -> 101, 135 -> 108); only very fast songs (150+) ride half-time.
+// Cadence shown as RPM. Ian (2026-10-03): RPM should match the beat of the song, so it is the BPM.
+// Only songs too fast to pedal (over 150 BPM) are shown at half-time.
 function cadenceFromBpm(b){
-  b = +b || 0;
-  if(b<=110) return Math.round(b);
-  if(b<150) return Math.min(110, Math.round(b*0.8));
-  return Math.round(b/2);
+  b = Math.round(+b || 0);
+  return b>150 ? Math.round(b/2) : b;
 }
 async function goToCurrent(){
   const t = tracks()[cur]; if(!t) return;
