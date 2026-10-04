@@ -558,13 +558,32 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 @media(prefers-reduced-motion:reduce){#spectrumFrame,.zonecard.spectrum,.strip i.spec,.hwseg.spec,#cdLight.tick span,.zonecard.fire::before,.zonecard.tunnel::before,#ride.fire::after,#ride.race::after{animation:none}.zonecard.flash,#callout.hot,.pulse{animation:none}}
 
 /* Teacher view dialog (QR + link for the instructor's phone) */
-#teachDlg .tqr{align-self:center;width:min(220px,60vw);aspect-ratio:1;background:#fff;border-radius:14px;padding:10px;display:flex;align-items:center;justify-content:center;color:#10141b;font-size:13px;text-align:center}
+#teachDlg .tqr{align-self:center;width:min(260px,64vw);aspect-ratio:1;background:#fff;border-radius:14px;padding:10px;display:flex;align-items:center;justify-content:center;color:#10141b;font-size:13px;text-align:center}
 #teachDlg .tqr svg{width:100%;height:100%;display:block}
 #teachDlg .tcode{font:800 28px/1 var(--disp);letter-spacing:.18em;text-align:center}
 #teachDlg input[type=text]{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;font-size:13px;width:100%}
 #teachDlg .tchk{flex-direction:row;align-items:center;gap:10px;font-weight:600}
 #teachDlg .tchk input{width:20px;height:20px}
 #teachDlg #teachStatus{margin:0;min-height:1.5em}
+
+/* Teacher view card on the Start Class page: the QR is always on screen so the instructor just scans it */
+.teachcard{display:flex;gap:16px;align-items:center;background:var(--card-grad);border:1px solid var(--card-border);border-radius:16px;padding:14px 16px;margin:0 0 14px;box-shadow:var(--shadow-sm)}
+.teachcard .tqr{flex:none;width:132px;height:132px;background:#fff;border-radius:12px;padding:8px;display:flex;align-items:center;justify-content:center;color:#10141b;font-size:12px;text-align:center}
+.teachcard .tqr svg{width:100%;height:100%;display:block}
+.teachcard h3{margin:0 0 4px;font-size:18px}
+.teachcard p{margin:0 0 8px;color:var(--muted);font-size:14px;line-height:1.45}
+.teachcard .tcrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.teachcard .tccode{font:800 22px/1 var(--disp);letter-spacing:.16em}
+.teachcard.off .tqr{opacity:.25}
+@media (max-width:560px){.teachcard{flex-direction:column;text-align:center}.teachcard .tcrow{justify-content:center}}
+
+/* "Scan to connect" screen shown right before a class starts */
+#readyDlg .tqr{align-self:center;width:min(300px,70vw);aspect-ratio:1;background:#fff;border-radius:16px;padding:12px;display:flex;align-items:center;justify-content:center;color:#10141b;font-size:13px;text-align:center}
+#readyDlg .tqr svg{width:100%;height:100%;display:block}
+#readyDlg .tcode{font:800 28px/1 var(--disp);letter-spacing:.18em;text-align:center}
+#readyDlg .tchk{flex-direction:row;align-items:center;gap:10px;font-weight:600;font-size:14px}
+#readyDlg .tchk input{width:18px;height:18px}
+#readyDlg h3,#readyDlg .note{text-align:center}
 </style>
 </head>
 <body>
@@ -665,6 +684,14 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     </div>
     <p>Pick a saved playlist to ride. Build or edit playlists in Playlist Creator.</p>
   </header>
+  <div class="teachcard" id="teachCard">
+    <div class="tqr" id="teachCardQr" aria-label="QR code that opens the instructor's phone view"></div>
+    <div>
+      <h3>Instructor phone view</h3>
+      <p id="teachCardMsg">Scan this with your phone's camera. It opens a simple screen with the color to call, what's next, and the song timing.</p>
+      <div class="tcrow"><span class="tccode" id="teachCardCode"></span><button class="btn" id="teachCardMore" type="button">Options</button></div>
+    </div>
+  </div>
   <input id="plSearch" type="search" placeholder="Search by date, theme, artist or song..." autocomplete="off" class="plsearch">
   <div style="margin:0 0 12px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn" id="btnDeleted">Recently deleted</button><button class="btn" id="btnTeach" title="Show the instructor's phone what color to call, what's next and when">Teacher view</button></div>
   <ol id="plList"></ol>
@@ -736,20 +763,31 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
 <dialog id="teachDlg">
   <div class="newform">
     <h3>Teacher view</h3>
-    <p class="note">A simple screen for the instructor's phone: the workout type, the color to call and when it changes, what's next, the song's time left, and the next song. Scan this with the phone, or open the link.</p>
+    <p class="note">A simple screen for the instructor's phone: the workout type, the color to call and when it changes, what's next, the song's time left, and the next song. Scan this QR code with the phone's camera.</p>
     <div class="tqr" id="teachQr" aria-label="QR code for the teacher link"></div>
     <div class="tcode" id="teachCode" aria-label="Class code"></div>
-    <input type="text" id="teachLink" readonly aria-label="Teacher link">
     <label class="tchk"><input type="checkbox" id="teachOn"> Share the class to the phone</label>
     <p class="note" id="teachStatus"></p>
     <div class="newacts">
       <button type="button" class="btn" id="teachNew" title="Makes a new code; the phone will need the new link">New code</button>
-      <button type="button" class="btn" id="teachCopy">Copy link</button>
       <button type="button" class="btn primary spectrum" id="teachDone">Done</button>
     </div>
   </div>
 </dialog>
 
+<dialog id="readyDlg">
+  <div class="newform">
+    <h3>Instructor: scan to connect</h3>
+    <p class="note">Point your phone's camera at this. Your screen will show the color to call, what's next, and the song timing.</p>
+    <div class="tqr" id="readyQr" aria-label="QR code for the instructor's phone"></div>
+    <div class="tcode" id="readyCode" aria-label="Class code"></div>
+    <label class="tchk"><input type="checkbox" id="readyAsk"> Show this before every class</label>
+    <div class="newacts">
+      <button type="button" class="btn" id="readyCancel">Cancel</button>
+      <button type="button" class="btn primary spectrum" id="readyStart">Start class</button>
+    </div>
+  </div>
+</dialog>
 <dialog id="statsDlg">
   <div class="newform statsform">
     <h3>Class complete</h3>
@@ -4290,7 +4328,7 @@ function showClassStats(){
 }
 $('#statsDone').onclick = ()=>{ $('#statsDlg').close(); exitRide(); };
 
-$('#btnStart').onclick = ()=>{ ensureDraftPlaylist(); activeList = null; activeOrigin = 'build'; clearTheme(); startClass(0); };
+$('#btnStart').onclick = ()=>{ ensureDraftPlaylist(); activeList = null; activeOrigin = 'build'; clearTheme(); readyThenStart(()=>startClass(0)); };
 $('#cPrev').onclick = ()=>{ if(cur>=0) prevTrack(); };
 $('#cNext').onclick = ()=>{ if(cur>=0 && cur<tracks().length-1) nextTrack(); };
 $('#cPlay').onclick = ()=>{
@@ -4568,7 +4606,7 @@ function startSavedPlaylist(id){
   p.tracks.forEach(t=>{ if(!t.plan || !t.opts){ t.opts = quickPick(t,'balanced',0); rebuild(t); } });
   autoPlanClass(p.tracks); save();   // older playlists saved before auto-planning get the arc too
   activeList = p.tracks; activeOrigin = 'library';
-  startClass(0);
+  readyThenStart(()=>startClass(0));
 }
 function exitRide(){
   liveStop();
@@ -4684,7 +4722,7 @@ function liveSaveCfg(){ try{ localStorage.setItem(LIVE_KEY, JSON.stringify(liveC
 function liveCfg(){
   if(liveCfgCache) return liveCfgCache;
   let o = null; try{ o = JSON.parse(localStorage.getItem(LIVE_KEY)||'null'); }catch(e){}
-  if(!o || !/^[A-Za-z0-9]{4,16}$/.test(o.code||'')) o = {code:liveRandCode(), on:false};
+  if(!o || !/^[A-Za-z0-9]{4,16}$/.test(o.code||'')) o = {code:liveRandCode(), on:true, seen:true};
   liveCfgCache = o; liveSaveCfg(); return o;
 }
 function liveLink(){ return new URL('teacher.html?c='+liveCfg().code, location.href).href; }
@@ -4755,6 +4793,29 @@ async function liveIdle(force, keepalive){
   catch(e){ liveErr = String((e && e.message) || e); }
 }
 function liveStop(){ liveIdle(false,true); }
+function teachCardRender(){
+  const cfg = liveCfg(), card = $('#teachCard'); if(!card) return;
+  const el = $('#teachCardQr');
+  card.classList.toggle('off', !cfg.on);
+  $('#teachCardCode').textContent = cfg.code;
+  $('#teachCardMsg').textContent = cfg.on
+    ? 'Scan this with your phone\u2019s camera. It opens a simple screen with the color to call, what\u2019s next, and the song timing.'
+    : 'Sharing is off. Tap Options to turn it on.';
+  try{ const q = qrcode(0,'M'); q.addData(liveLink()); q.make(); el.innerHTML = q.createSvgTag({cellSize:6, margin:0, scalable:true}); }
+  catch(e){ el.textContent = 'QR code unavailable'; }
+}
+let readyGo = null;
+function readyThenStart(go){
+  const cfg = liveCfg();
+  if(!cfg.on || cfg.ask===false){ go(); return; }
+  readyGo = go;
+  try{ const q = qrcode(0,'M'); q.addData(liveLink()); q.make(); $('#readyQr').innerHTML = q.createSvgTag({cellSize:6, margin:0, scalable:true}); }
+  catch(e){ $('#readyQr').textContent = 'QR code unavailable'; }
+  $('#readyCode').textContent = cfg.code;
+  $('#readyAsk').checked = cfg.ask!==false;
+  liveIdle();   // so the phone shows "connected, waiting for class" the moment it scans
+  const d = $('#readyDlg'); if(!d.open) d.showModal();
+}
 function teachStatus(){
   const cfg = liveCfg(); let msg;
   if(!cfg.on) msg = 'Sharing is off.';
@@ -4765,11 +4826,11 @@ function teachStatus(){
 }
 function teachRender(){
   const cfg = liveCfg(), link = liveLink();
-  $('#teachLink').value = link; $('#teachCode').textContent = cfg.code; $('#teachOn').checked = !!cfg.on;
+  $('#teachCode').textContent = cfg.code; $('#teachOn').checked = !!cfg.on;
   const el = $('#teachQr');
   try{ const q = qrcode(0,'M'); q.addData(link); q.make(); el.innerHTML = q.createSvgTag({cellSize:6, margin:0, scalable:true}); }
   catch(e){ el.textContent = 'QR code unavailable \u2014 use the link.'; }
-  teachStatus();
+  teachStatus(); teachCardRender();
 }
 function openTeach(){
   const cfg = liveCfg();
@@ -4779,7 +4840,13 @@ function openTeach(){
   const d = $('#teachDlg'); if(!d.open) d.showModal();
   clearInterval(teachT); teachT = setInterval(teachStatus,1000);
 }
+$('#readyStart').onclick = ()=>{ const go = readyGo; readyGo = null; $('#readyDlg').close(); if(go) go(); };
+$('#readyCancel').onclick = ()=>$('#readyDlg').close();
+$('#readyAsk').onchange = ()=>{ const cfg = liveCfg(); cfg.ask = $('#readyAsk').checked; liveSaveCfg(); };
+// closed any other way (Cancel, Esc) = the class does NOT start; undo what startSavedPlaylist set up
+$('#readyDlg').addEventListener('close', ()=>{ if(readyGo){ readyGo = null; activeList = null; activeOrigin = 'build'; } });
 $('#btnTeach').onclick = openTeach;
+$('#teachCardMore').onclick = openTeach;
 $('#cTeach').onclick = openTeach;
 $('#teachDone').onclick = ()=>$('#teachDlg').close();
 $('#teachDlg').addEventListener('close', ()=>clearInterval(teachT));
@@ -4794,12 +4861,9 @@ $('#teachNew').onclick = ()=>{
   const cfg = liveCfg(); cfg.code = liveRandCode(); liveSaveCfg(); liveLast = null; livePlanV = null;
   teachRender(); if(cfg.on && $('#ride').hidden) liveIdle();
 };
-$('#teachCopy').onclick = async ()=>{
-  const link = liveLink();
-  try{ await navigator.clipboard.writeText(link); toast('Teacher link copied'); }
-  catch(e){ const i = $('#teachLink'); i.focus(); i.select(); try{ document.execCommand('copy'); toast('Teacher link copied'); }catch(e2){ toast('Select the link and copy it'); } }
-};
 window.addEventListener('pagehide', ()=>{ if(!$('#ride').hidden) liveStop(); });
+teachCardRender();
+setTimeout(()=>{ if(liveCfg().on && $('#ride').hidden) liveIdle(); }, 1200);
 
 // ---------- init ----------
 $('#brandbar').innerHTML = $('#brandbar2').innerHTML = ZONES.map(z=>`<i style="background:${z.color}"></i>`).join('');
