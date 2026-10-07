@@ -518,6 +518,8 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
    (instead of a silent clip) covers it whether the block is a little short or a lot short. */
 .hwseg span:first-child{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .hwseg.past{opacity:.28}
+.hwsep{position:absolute;top:0;bottom:0;width:3px;background:#fff;z-index:1;box-shadow:0 0 8px rgba(255,255,255,.7)}
+.hwsep span{position:absolute;bottom:8px;left:8px;font-size:12px;font-weight:700;color:#fff;background:rgba(0,0,0,.72);border-radius:4px;padding:1px 6px;white-space:nowrap;box-shadow:0 0 0 1px rgba(255,255,255,.3)}
 .hwseg.spec span{text-shadow:0 1px 3px rgba(0,0,0,.9),0 0 12px rgba(0,0,0,.7)}
 .hwseg span:last-child{font-variant-numeric:tabular-nums;opacity:.8;font-weight:500}
 /* A solid opaque band (not just a thin border) with a dark halo on both sides, so it reads as
@@ -536,9 +538,11 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
    Fix: every small-text element is either on its OWN dark card with explicit near-white text
    (never inheriting the zone ink), or on the zone color with the zone's ink plus a legibility
    shadow when that ink is white. Zone color stays the dominant thing; text no longer depends on it. */
-#panel .np{background:rgba(8,12,20,.72);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:5px 12px;color:#fff}
-#panel .np .nt,#panel .np .nm{color:#fff;text-shadow:none}
-#panel .np .nm{color:#d3dbe9}
+/* 2026-10-06 (Ian): the title / "Song x of y" / class-time box moved out of the side panel and onto
+   the top-left corner of the video — the panel's bar was getting cut off on the gym projector. */
+#stage .np{position:absolute;top:16px;left:16px;z-index:8;max-width:min(52%,560px);pointer-events:none;background:rgba(8,12,20,.72);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:6px 12px;color:#fff;text-align:left;backdrop-filter:blur(3px)}
+#stage .np .nt{color:#fff;text-shadow:none;text-align:left}
+#stage .np .nm{color:#d3dbe9;justify-content:flex-start;gap:14px}
 #panel .wtype{background:rgba(8,12,20,.82);color:#fff;border:1px solid rgba(255,255,255,.3);text-shadow:none}
 #panel #callout{background:rgba(8,12,20,.88);color:#fff;border:1px solid rgba(255,255,255,.18)}
 #panel .stat{background:linear-gradient(165deg,rgba(14,19,30,.94),rgba(8,12,20,.94));color:#fff;border-color:rgba(255,255,255,.2)}
@@ -808,7 +812,10 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
     <div id="classProgressLabel"></div>
   </div>
   <button id="rideExit" title="Exit class" aria-label="Exit class">&times;</button>
-  <div id="stage"><div id="yt"></div><div id="cdLight" hidden aria-hidden="true"><span id="cdNum">5</span><em id="cdCue"></em></div><div id="mashupSaver" hidden>
+  <div id="stage"><div id="yt"></div><div class="np" id="npOverlay">
+      <div class="nt" id="npTitle"></div>
+      <div class="nm"><span id="npIdx"></span><span id="npClass"></span></div>
+    </div><div id="cdLight" hidden aria-hidden="true"><span id="cdNum">5</span><em id="cdCue"></em></div><div id="mashupSaver" hidden>
     <div id="mashupArt"></div>
     <div id="mashupCrawl"></div>
     <div id="mashupMeta"><b id="mashupMetaTitle"></b><span id="mashupMetaArtist"></span></div>
@@ -821,10 +828,6 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
          controls row scrolls if it has to — the controls themselves (Full screen included) stay
          pinned at the bottom of the panel, always visible. -->
     <div id="panelScroll">
-    <div class="np">
-      <div class="nt" id="npTitle"></div>
-      <div class="nm"><span id="npIdx"></span><span id="npClass"></span></div>
-    </div>
     <!-- Ian, items 5/6: the workout-type label was easy to miss in the first ~30s of a song.
          DECIDED: no new data, just make the three things that were already here (workout type,
          current target zone, upcoming-color shape) bigger and better organized — so this badge
@@ -1020,10 +1023,10 @@ function nextLabel(seg){
 }
 // peak = hardest zone the goal uses, base = recovery zone, work/rest = default interval seconds
 const GOALS = {
-  cooldown:  {label:'Cool down',      peak:1, base:0, work:40, rest:40},
-  endurance: {label:'Endurance',      peak:2, base:1, work:90, rest:45},
-  balanced:  {label:'Balanced',       peak:3, base:1, work:45, rest:30},
-  high:      {label:'High intensity', peak:4, base:1, work:30, rest:45}
+  cooldown:  {label:'Cool down',      peak:1, base:0, work:40, rest:20},
+  endurance: {label:'Endurance',      peak:2, base:1, work:60, rest:30},
+  balanced:  {label:'Balanced',       peak:3, base:1, work:40, rest:20},
+  high:      {label:'High intensity', peak:4, base:1, work:20, rest:10}
 };
 const STYLES = {interval:'Intervals', timetrial:'Time trial', race:'Race', pyramid:'Pyramid', climb:'Climb', warmup:'Warm up', recover:'Cool down', custom:'Custom'};
 // Ian: "we should be able to call it certain things (such as intervals) if I updated it" — once
@@ -1092,7 +1095,10 @@ function planOffset(t,style){
   const own = Math.max(0,+t.offset||0);
   if(t.offsetManual) return own;
   if(style === 'custom') return own;
-  return Math.min(ttOffset(t.dur||0), Math.max(0, (t.dur||0) - 45));
+  // Ian, 2026-10-06: "Interval intro is too long, make it 30 seconds max." Only a time trial
+  // keeps the longer 1:00 lead-in on a 4+ minute song.
+  const lead = style === 'timetrial' ? ttOffset(t.dur||0) : Math.min(30, ttOffset(t.dur||0));
+  return Math.min(lead, Math.max(0, (t.dur||0) - 45));
 }
 function distribute(N,k,order){
   const out = new Array(k).fill(Math.floor(N/k));
@@ -1170,7 +1176,7 @@ function tInterval(N,g,o,us){
   }
   return steps;
 }
-function tPyramid(N,g){
+function tPyramid(N,g,unitS){
   // On a high-intensity song a full sweep down to zone 1 drags the average effort right
   // back down, so the pyramid keeps its feet off the floor and works the top half.
   let lo = g.peak>=4 ? Math.max(g.base,g.peak-2) : Math.max(0,g.base), hi = g.peak;
@@ -1178,10 +1184,29 @@ function tPyramid(N,g){
   const up = []; for(let z=lo; z<=hi; z++) up.push(z);
   let zs = [...up, ...up.slice(0,-1).reverse()];
   if(N<zs.length) zs = [lo,hi,lo];
-  const mid = (zs.length-1)/2;
-  const order = zs.map((_,i)=>i).sort((a,b)=>Math.abs(a-mid)-Math.abs(b-mid));
-  const us = distribute(N,zs.length,order);
   const peakIdx = zs.indexOf(hi);
+  // Ian, 2026-10-06: "Pyramids should have longer times at the peak, the steps up and down should
+  // be faster." The peak block is weighted 3x a step (every step gets at least one unit); the
+  // leftover units go to whichever block is furthest below its weighted share, peak first.
+  const wts = zs.map((_,i)=> i===peakIdx ? 3 : 1), wsum = wts.reduce((a,b)=>a+b,0);
+  const us = zs.map(()=>1);
+  let spare = N - zs.length;
+  while(spare>0){
+    let best = 0, bestGap = -Infinity;
+    for(let i=0;i<zs.length;i++){ const gap = N*wts[i]/wsum - us[i] + (i===peakIdx ? 0.001 : 0); if(gap>bestGap){ bestGap = gap; best = i; } }
+    us[best]++; spare--;
+  }
+  // Red can only be held about a minute (see capRedSegments), so a red peak stops at 60s and the
+  // extra time goes to the steps instead of turning into a mid-peak recovery.
+  if(hi>=4 && unitS){
+    const maxU = Math.max(1, Math.floor(60/unitS));
+    let extra = us[peakIdx] - maxU, j = 0;
+    if(extra>0){
+      us[peakIdx] = maxU;
+      const others = zs.map((_,i)=>i).filter(i=>i!==peakIdx);
+      while(extra>0 && others.length){ us[others[j%others.length]]++; extra--; j++; }
+    }
+  }
   return zs.map((z,i)=>{
     if(i===peakIdx) return stp(z,us[i],'Peak','Hold it at the top');
     return i<peakIdx ? stp(z,us[i],'Build','Bring it up') : stp(z,us[i],'Come down','Bring it down');
@@ -1251,7 +1276,7 @@ function buildPlan(t,o){
   let steps;
   switch(style){
     case 'timetrial': steps = tTimetrial(N,g,o,D); break;
-    case 'pyramid':   steps = tPyramid(N,g); break;
+    case 'pyramid':   steps = tPyramid(N,g,us); break;
     case 'climb':     steps = tClimb(N,g); break;
     case 'race':      steps = tRace(N); break;
     case 'warmup':    steps = tWarmup(N); break;
@@ -2242,9 +2267,11 @@ function enrichAllBpm(){
 // Interval timing varies per song as well. Without this every interval song in a class
 // ran the same work/rest split, which rides as one long identical block.
 const INTERVAL_SHAPES = {
-  endurance: [[90,45],[120,60],[75,45]],
-  balanced:  [[45,30],[60,30],[30,30],[75,45]],
-  high:      [[30,45],[20,20],[40,20],[25,35],[20,10]]
+  // Ian, 2026-10-06: only 60/30, 40/20 and 20/10 — work is always the bigger number, and nothing
+  // longer than a minute of work, since most songs are only ~3 minutes.
+  endurance: [[60,30],[40,20],[20,10]],
+  balanced:  [[40,20],[60,30],[20,10]],
+  high:      [[20,10],[40,20],[60,30]]
 };
 // ---------- arc-based playlist building ----------
 // Ian's shape: open easy, heat up, go intense, put the biggest most explosive song
@@ -3907,6 +3934,7 @@ function layoutHighway(){
   // math unchanged, which put early segments on the right and read as running backwards.)
   hwInner.style.width = ((D+off)*pps)+'px';
   let html = '';
+  const nxTrack = tracks()[cur+1];
   if(off>0){
     const w = off*pps - 2, left = 1;
     html += `<div class="hwseg lead" style="left:${left}px;width:${Math.max(2,w)}px;background:${ZONES[0].color};color:${ZONES[0].ink}">${w>=42?`<span>Intro</span><span>${fmt(off)}</span>`:''}</div>`;
@@ -3915,6 +3943,24 @@ function layoutHighway(){
     const w = (s.end-s.start)*pps - 2, left = (off+s.start)*pps + 1, z = ZONES[s.z];
     return `<div class="hwseg ${s.race?'spec':''}" data-i="${i}" style="left:${left}px;width:${Math.max(2,w)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${w>=42?`<span>${levelTextShort(s.z,s.race,s.effect)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
   }).join('');
+  // Ian, 2026-10-06: "the scrolling bar should go into the next song because right now ... it just
+  // ends so you don't know what's next." The next song's own intro + blocks are laid out right after
+  // this one, behind a "Next song" divider.
+  if(nxTrack && nxTrack.plan){
+    const base = D+off, nOff = nxTrack.plan.off||0;
+    let total = base;
+    html += `<div class="hwsep" style="left:${base*pps-1}px"><span>Next song</span></div>`;
+    if(nOff>0){
+      const w = nOff*pps - 2;
+      html += `<div class="hwseg nxt" style="left:${base*pps+1}px;width:${Math.max(2,w)}px;background:${ZONES[0].color};color:${ZONES[0].ink}">${w>=42?`<span>Intro</span><span>${fmt(nOff)}</span>`:''}</div>`;
+    }
+    html += nxTrack.plan.segs.map(s=>{
+      const w = (s.end-s.start)*pps - 2, left = (base+nOff+s.start)*pps + 1, z = ZONES[s.z];
+      return `<div class="hwseg nxt ${s.race?'spec':''}" style="left:${left}px;width:${Math.max(2,w)}px;background:${z.color};color:${s.race?'#fff':z.ink}">${w>=42?`<span>${levelTextShort(s.z,s.race,s.effect)}</span><span>${fmt(s.end-s.start)}</span>`:''}</div>`;
+    }).join('');
+    total += nOff + nxTrack.plan.D;
+    hwInner.style.width = (total*pps)+'px';
+  }
   hwInner.innerHTML = html;
   $('#nowLine').style.left = nowX+'px';
   lastIdx = -2;
@@ -4079,11 +4125,11 @@ function buildSongProgressBar(t){
     } else markEl.hidden = true;
   }
 }
-// Cadence shown as RPM. Ian (2026-10-03): RPM should match the beat of the song, so it is the BPM.
-// Only songs too fast to pedal (over 150 BPM) are shown at half-time.
+// Cadence shown as RPM. Ian (2026-10-06): "under 112 should be half". So: under 112 BPM rides at
+// half-time, 112-150 BPM rides the beat (RPM = BPM), and over 150 BPM is also half-time.
 function cadenceFromBpm(b){
   b = Math.round(+b || 0);
-  return b>150 ? Math.round(b/2) : b;
+  return (b<112 || b>150) ? Math.round(b/2) : b;
 }
 async function goToCurrent(){
   const t = tracks()[cur]; if(!t) return;
@@ -4253,7 +4299,16 @@ function frame(){
       // "Last step" read as if the whole workout were ending, when really it's just this song's
       // last block — the class keeps going into the next song. Only the true end-of-class case
       // (no nt) should sound like an ending.
-      setText('calloutText', nt ? 'Finishing this song. Next: '+nt.title : 'Last step of the class');
+      let ctext = 'Last step of the class';
+      if(nt && nt.plan){
+        // Ian, 2026-10-06: not "finishing this song" — say what's coming: next song, its workout
+        // type, and the color you start in (the white intro if the song has one).
+        const startSeg = (nt.plan.off>0) ? {z:0} : nt.plan.segs[0];
+        const typeName = styleLabel(nt.opts) || STYLES[nt.plan.style] || 'Next song';
+        ctext = 'Next song: '+typeName+' \u00b7 start '+nextLabel(startSeg);
+        callout.querySelector('.sw').style.background = ZONES[startSeg.z].color;
+      } else if(nt) ctext = 'Next song';
+      setText('calloutText', ctext);
     }
     const x0 = nowX - (plan.off+p)*pps; hwInner.style.transform = 'translateX('+x0+'px)';
   } else {
