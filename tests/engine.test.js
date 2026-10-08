@@ -430,6 +430,32 @@ check('a 20/10 interval shape is available for high-intensity songs', () => {
   ok(shapes.includes('20/10'), 'expected a 20/10 shape in INTERVAL_SHAPES.high, got: '+shapes.join(', '));
 });
 
+// ---------- ad detection (embedded YouTube player) ----------
+const adApi = (() => {
+  const a = html.indexOf('/*AD_START*/'), b = html.indexOf('/*AD_END*/');
+  if(a < 0 || b <= a) throw new Error('Could not find the ad-detection block in index.html (/*AD_START*/ .. /*AD_END*/).');
+  return vm.runInNewContext(html.slice(a + '/*AD_START*/'.length, b) + ';adDetected', {});
+})();
+check('ad detection: the player saying an ad is playing always counts', () => {
+  ok(adApi({state:1, adState:1, hasAdApi:true, dur:15, expected:230}) === true, 'adState 1 should be an ad');
+  ok(adApi({state:3, adState:1, hasAdApi:true, dur:0, expected:230}) === true, 'adState 1 should be an ad even while buffering');
+});
+check('ad detection: when the player can report ad state and says no, a length mismatch is NOT an ad', () => {
+  ok(adApi({state:1, adState:-1, hasAdApi:true, dur:251, expected:230}) === false, 'a song whose real length differs from the stored one must never freeze the class');
+  ok(adApi({state:1, adState:0, hasAdApi:true, dur:15, expected:230}) === false, 'trust the explicit "no ad" answer');
+});
+check('ad detection: a normal song is not an ad', () => {
+  ok(adApi({state:1, adState:-1, hasAdApi:true, dur:230, expected:230}) === false);
+  ok(adApi({state:2, adState:-1, hasAdApi:true, dur:230, expected:230}) === false, 'paused');
+});
+check('ad detection: without an ad API, only a playing player with a very different length counts', () => {
+  ok(adApi({state:1, adState:null, hasAdApi:false, dur:15, expected:230}) === true, '15s clip inside a 230s song should read as an ad');
+  ok(adApi({state:1, adState:null, hasAdApi:false, dur:231, expected:230}) === false, 'a 1s difference is rounding, not an ad');
+  ok(adApi({state:3, adState:null, hasAdApi:false, dur:15, expected:230}) === false, 'not playing yet');
+  ok(adApi({state:1, adState:null, hasAdApi:false, dur:0, expected:230}) === false, 'no length reported yet');
+  ok(adApi({state:1, adState:null, hasAdApi:false, dur:15, expected:0}) === false, 'no expected length to compare to');
+});
+
 // ---------- report ----------
 if(failures.length){
   console.error('\n  ' + failures.length + ' failing, ' + passed + ' passing\n');
