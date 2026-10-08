@@ -167,8 +167,14 @@ details ol{margin:10px 0;padding-left:20px;color:var(--muted);font-size:14px;lin
 #totals .ok{color:#7fd6a2}
 .bpmbox.guess{border-style:dashed;border-color:#8a7a3a}
 .bpmbox input{width:56px;padding:3px 4px;border:0;background:transparent;font-weight:700;font-variant-numeric:tabular-nums}
-.strip{display:flex;height:16px;gap:3px;border-radius:5px;overflow:hidden;background:#0c1017;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
+.strip{position:relative;display:flex;height:16px;gap:3px;border-radius:5px;overflow:hidden;background:#0c1017;box-shadow:inset 0 0 0 1px rgba(255,255,255,.04)}
 .strip.big{height:30px;margin:14px 0 8px}
+#fStrip.strip.big{margin-top:40px} /* room above the bar for each boundary's × so it never covers the + Add boundary button */
+/* class-time milestones (30 / 45 / 60 min) — a tick on the song's bar plus a pill above it */
+.strip b.mtick{position:absolute;top:0;bottom:0;width:3px;margin-left:-1px;background:#fff;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.65),0 0 8px rgba(255,255,255,.9);pointer-events:none}
+.miles{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 8px}
+.miles .mile{display:inline-flex;align-items:center;gap:6px;color:#ffe08a;border:1px solid rgba(255,224,138,.45);background:rgba(255,224,138,.12);border-radius:999px;padding:2px 11px;font-size:13px;font-weight:800;letter-spacing:.02em}
+.miles .mile i{font-style:normal;font-weight:600;color:var(--text);opacity:.85}
 .strip i{display:block;min-width:2px;filter:saturate(1.08);border-radius:3px}
 .strip i.segclick{cursor:pointer;transition:filter .1s,outline-color .1s}
 .strip i.segclick:hover{filter:saturate(1.08) brightness(1.18);outline:2px solid rgba(255,255,255,.65);outline-offset:-2px}
@@ -2814,8 +2820,23 @@ function stripHTML(segs,D,off,interactive){
 function pipsHTML(level){
   let h=''; for(let i=1;i<=5;i++) h += `<i style="${i<=level?'background:'+ZONES[level-1].color:''}"></i>`; return h;
 }
+// Class-time milestones. Cumulative song time (no gaps between songs) is what the ride clock
+// follows, so a milestone lands wherever the running total crosses it — usually mid-song.
+const CLASS_MILESTONES_MIN = [30,45,60];
+function milestonesIn(ts,i){
+  let start = 0; for(let k=0;k<i;k++) start += ts[k].dur;
+  const end = start+ts[i].dur, last = i===ts.length-1, out = [];
+  CLASS_MILESTONES_MIN.forEach(min=>{
+    const m = min*60;
+    if((m>=start && m<end) || (last && m===end)) out.push({min, off:m-start, frac:ts[i].dur>0 ? (m-start)/ts[i].dur : 0, atEnd:m===end});
+  });
+  return out;
+}
 function trackHTML(t,i){
   const e = effort(t.plan.segs);
+  const ms = milestonesIn(tracks(),i);
+  const msPills = ms.length ? `<div class="miles">${ms.map(m=>`<span class="mile" title="The class clock hits ${m.min}:00 during this song">&#9873; ${m.min} min<i>${m.atEnd?'ends here':(m.off<2?'starts here':fmt(m.off)+' into this song')}</i></span>`).join('')}</div>` : '';
+  const msTicks = ms.map(m=>`<b class="mtick" style="left:${Math.min(99.5,m.frac*100).toFixed(2)}%" title="${m.min} min into the class"></b>`).join('');
   const goal = t.plan.style==='recover' ? '' : ((GOALS[t.opts.goal]||{}).label||'');
   // show the interval split, since the auto-planner now varies it song to song
   const iv = t.plan.style==='interval' && t.opts.workSec
@@ -2832,7 +2853,7 @@ function trackHTML(t,i){
         <label class="bpmbox ${t.bpmSrc==='guess'?'guess':''}" title="${tip}"><input class="bpm" type="number" min="60" max="200" value="${t.bpm}" data-act="bpm" aria-label="BPM for ${esc(t.title)}"> BPM</label>
         <button class="mini" data-act="half" title="Half tempo">&frac12;</button><button class="mini" data-act="double" title="Double tempo">&times;2</button>
       </div>
-      <div class="strip">${stripHTML(t.plan.segs,t.plan.D,t.plan.off)}</div>
+      ${msPills}<div class="strip">${stripHTML(t.plan.segs,t.plan.D,t.plan.off)}${msTicks}</div>
       <div class="tplan"><b>${styleLabel(t.opts)||STYLES[t.plan.style]}</b>${goal?`<span>${goal}</span>`:''}${t.plan.off>0?`<span title="The plan starts after the intro">Starts ${fmt(t.plan.off)}</span>`:''}${iv}<span class="pips" title="Effort ${e.level} of 5">${pipsHTML(e.level)}</span><span>Effort ${e.level} of 5</span>${t.manual?'<span class="pin" title="You set this one by hand — the automatic class plan leaves it alone">Remixed</span>':''}</div>
     </div>
     <div class="tacts">
@@ -5009,7 +5030,7 @@ setTimeout(()=>{ if(allTrackLists().some(l=>l.some(t=>t.kind==='mashup'))) loadM
 {
   const cr = document.createElement('a');
   cr.id = 'bpmCredit'; cr.href = 'https://getsongbpm.com'; cr.target = '_blank'; cr.rel = 'noopener'; cr.textContent = 'BPM data by GetSongBPM.com';
-  cr.style.cssText = 'position:fixed;right:10px;bottom:10px;z-index:5;font:600 11px Outfit,system-ui,sans-serif;color:#98a4b8;opacity:.75;text-decoration:none';
+  cr.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:10px;z-index:5;white-space:nowrap;font:600 11px Outfit,system-ui,sans-serif;color:#98a4b8;opacity:.75;text-decoration:none';
   const st2 = document.createElement('style'); st2.textContent = '#ride:not([hidden]) ~ #bpmCredit{display:none}#bpmCredit:hover{opacity:1;text-decoration:underline}';
   document.head.appendChild(st2); document.body.appendChild(cr);
 }
