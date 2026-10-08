@@ -546,6 +546,9 @@ dialog::backdrop{background:rgba(4,6,10,.72);backdrop-filter:blur(3px)}
    shadow when that ink is white. Zone color stays the dominant thing; text no longer depends on it. */
 /* 2026-10-06 (Ian): the title / "Song x of y" / class-time box moved out of the side panel and onto
    the top-left corner of the video — the panel's bar was getting cut off on the gym projector. */
+#adBanner{position:absolute;top:64px;right:16px;z-index:15;pointer-events:none;background:#ffd21f;color:#111;font:800 clamp(14px,2.4vh,22px) Outfit,system-ui,sans-serif;padding:8px 18px;border-radius:999px;box-shadow:0 4px 18px rgba(0,0,0,.45)}
+#adBanner[hidden]{display:none}
+#ride.adhold #panel{filter:saturate(.35) brightness(.9)}
 #stage .np{position:absolute;top:16px;left:16px;z-index:8;max-width:min(52%,560px);pointer-events:none;background:rgba(8,12,20,.72);border:1px solid rgba(255,255,255,.16);border-radius:12px;padding:6px 12px;color:#fff;text-align:left;backdrop-filter:blur(3px)}
 #stage .np .nt{color:#fff;text-shadow:none;text-align:left}
 #stage .np .nm{color:#d3dbe9;justify-content:flex-start;gap:14px}
@@ -3991,6 +3994,8 @@ async function playMashupAudio(t, stage){
 
 // ---------- ride view ----------
 let player = null, ytOK = false, cur = -1, anchor = {t:0,at:0}, lastIdx = -2, raf = 0, ended = false;
+let adActive = false, adSince = 0, adHoldT = 0;
+const adIgnore = new Set();   // songs where an "ad" lasted implausibly long: treated as a false alarm for the rest of the class
 // Real time-in-zone for the end-of-class stats screen: keyed by zone index (0-4) plus 'race'
 // for the full-spectrum race style, which isn't really any one color. Accumulated in frame()
 // from actual wall-clock time while something is genuinely playing, so pauses, replays and
@@ -4229,7 +4234,7 @@ function cadenceFromBpm(b){
 async function goToCurrent(){
   const t = tracks()[cur]; if(!t) return;
   videoMode = false;
-  anchor = {t:0,at:performance.now()}; ended = false; t._checked = false;
+  anchor = {t:0,at:performance.now()}; ended = false; t._checked = false; adReset();
   setText('npTitle',t.title); setText('npIdx','Song '+(cur+1)+' of '+tracks().length);
   setText('bpmV',String(cadenceFromBpm(t.bpm)));
   $('#pulse').style.setProperty('--beat',(60/t.bpm).toFixed(3)+'s');
@@ -4276,6 +4281,38 @@ function workoutTypeText(t){
   return label;
 }
 
+/*AD_START*/
+// Ad detection for the embedded YouTube player. During an ad the player reports the ad's own clock
+// and length, not the song's, so the color timeline would run off the ad. Signals: the player's own
+// getAdState() === 1; or, only on a player build that has no getAdState, "PLAYING but its length is
+// not the song's".
+function adDetected(o){
+  if(o.adState === 1) return true;      // the player says an ad is playing
+  if(o.hasAdApi) return false;          // it can tell us, and it says no
+  return o.state === 1 && o.dur > 0 && o.expected > 0 && Math.abs(o.dur - o.expected) > Math.max(5, o.expected * 0.04);
+}
+/*AD_END*/
+function adUI(on){
+  let b = document.getElementById('adBanner');
+  if(!b){ b = document.createElement('div'); b.id = 'adBanner'; b.setAttribute('role','status'); b.textContent = 'Ad playing \u2014 colors on hold'; $('#stage').appendChild(b); }
+  b.hidden = !on;
+  $('#ride').classList.toggle('adhold', !!on);
+}
+// Turns the raw detection into the held/not-held state, with a safety valve: an "ad" that lasts
+// more than 2.5 minutes is a false alarm, so the class is never frozen for good.
+function adTrack(t, raw){
+  const now = performance.now(), key = t.uid || t.id || t.title;
+  if(adIgnore.has(key)) raw = false;
+  if(raw){ if(!adSince) adSince = now; if(now - adSince > 150000){ adIgnore.add(key); raw = false; } }
+  else adSince = 0;
+  if(raw !== adActive){ adActive = raw; adUI(raw); liveLast = null; }   // liveLast=null: tell the phone right away
+  return adActive;
+}
+function adReset(){
+  adHoldT = 0; adSince = 0;
+  if(adActive){ adActive = false; adUI(false); liveLast = null; }
+}
+
 function frame(){
   raf = requestAnimationFrame(frame);
   if($('#ride').hidden || cur<0) return;
@@ -4284,13 +4321,20 @@ function frame(){
   if(usingAudio && !mashupAudio) return;
   if(!usingAudio && (!player || !ytOK)) return;
 
-  let pt = 0, playingNow = false;
+  let pt = 0, playingNow = false, adNow = false;
   if(usingAudio){
     pt = mashupAudio.currentTime||0; playingNow = !mashupAudio.paused;
+    if(adActive) adTrack(t,false);
   } else {
-    let st = -1; try{ pt = player.getCurrentTime()||0; st = player.getPlayerState(); }catch(e){ return; }
+    let st = -1, as = null, dd = 0;
+    try{ pt = player.getCurrentTime()||0; st = player.getPlayerState(); dd = player.getDuration()||0; }catch(e){ return; }
+    const hasAdApi = typeof player.getAdState === 'function';
+    if(hasAdApi){ try{ as = player.getAdState(); }catch(e){ as = null; } }
+    adNow = adTrack(t, adDetected({state:st, adState:as, hasAdApi:hasAdApi && as!==null, dur:dd, expected:t.dur}));
     playingNow = st===1;
   }
+  // During an ad: hold the song clock where it was, so colors and countdown wait for the real song.
+  if(adNow){ pt = adHoldT; playingNow = false; } else if(!usingAudio) adHoldT = pt;
   const now = performance.now();
   let time;
   if(playingNow){
@@ -4299,7 +4343,7 @@ function frame(){
   } else { anchor = {t:pt,at:now}; time = pt; }
   liveTick(time, playingNow);   // Teacher view relay (no-op unless sharing is on)
 
-  if(!usingAudio && t.kind==='youtube' && !t._checked && playingNow){
+  if(!usingAudio && t.kind==='youtube' && !t._checked && playingNow && !adActive){
     t._checked = true;
     let d = 0; try{ d = player.getDuration(); }catch(e){}
     if(d>0 && Math.abs(d-t.dur)>1.5){ t.dur = Math.round(d); rebuild(t); save(); layoutHighway(); buildClassProgressBar(); buildSongProgressBar(t); }
@@ -4909,10 +4953,10 @@ async function liveRpc(fn, body, keepalive){
 async function liveSend(time, playing){
   const cfg = liveCfg(), now = performance.now();
   const plan = livePlanPayload(), v = liveHash(JSON.stringify(plan));
-  const body = {p_code:cfg.code, p_st:{live:true, cur, pos:+(+time).toFixed(2), playing:!!playing, ended:!!ended}};
+  const body = {p_code:cfg.code, p_st:{live:true, cur, pos:+(+time).toFixed(2), playing:!!playing, ended:!!ended, ad:adActive?1:0}};
   const withPlan = v !== livePlanV;                   // plan only re-sent when it actually changed
   if(withPlan){ body.p_v = v; body.p_plan = plan; }
-  liveLast = {cur, playing:!!playing, ended:!!ended, pos:time, at:now};
+  liveLast = {cur, playing:!!playing, ended:!!ended, pos:time, at:now, ad:adActive?1:0};
   liveBusy = true;
   try{ await liveRpc('spin_live_put', body); if(withPlan) livePlanV = v; liveOkAt = Date.now(); liveErr = ''; }
   catch(e){ liveErr = String((e && e.message) || e); liveFailUntil = performance.now()+2500; liveLast = null; }
@@ -4929,7 +4973,7 @@ function liveTick(time, playing){
     // update until the new song's clock has restarted (or 1.2s), so the phone never flashes the new
     // song at the old song's position.
     if(L.cur!==cur && time>=3 && now-liveCurAt<1200) return;
-    if(L.cur!==cur || L.playing!==!!playing || L.ended!==!!ended) due = true;                            // song change / play-pause / end
+    if(L.cur!==cur || L.playing!==!!playing || L.ended!==!!ended || L.ad!==(adActive?1:0)) due = true;                            // song change / play-pause / end
     else if(Math.abs(time - (L.pos + (L.playing ? (now-L.at)/1000 : 0))) > 1.2) due = true;              // seek / skip within a song
     else if(now - L.at >= LIVE_BEAT_MS) due = true;                                                       // heartbeat
   }
