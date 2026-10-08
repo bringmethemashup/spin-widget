@@ -2837,7 +2837,9 @@ function trackHTML(t,i){
   const ms = milestonesIn(tracks(),i);
   const msPills = ms.length ? `<div class="miles">${ms.map(m=>`<span class="mile" title="The class clock hits ${m.min}:00 during this song">&#9873; ${m.min} min<i>${m.atEnd?'ends here':(m.off<2?'starts here':fmt(m.off)+' into this song')}</i></span>`).join('')}</div>` : '';
   const msTicks = ms.map(m=>`<b class="mtick" style="left:${Math.min(99.5,m.frac*100).toFixed(2)}%" title="${m.min} min into the class"></b>`).join('');
-  const goal = t.plan.style==='recover' ? '' : ((GOALS[t.opts.goal]||{}).label||'');
+  // The intensity label follows the song's ACTUAL effort (the same 1-5 score as the pips), not the
+  // goal it was planned with — so a song changed to a cool down, or recolored harder, reads right.
+  const goal = t.plan.style==='recover' ? '' : (['','Cool down','Endurance','Balanced','High intensity','High intensity'][e.level]||'');
   // show the interval split, since the auto-planner now varies it song to song
   const iv = t.plan.style==='interval' && t.opts.workSec
     ? `<span title="Work / recover, in seconds">${t.opts.workSec}s on &middot; ${t.opts.restSec}s off</span>` : '';
