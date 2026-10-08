@@ -98,6 +98,14 @@ html,body{margin:0;height:100%;background:#0b0e14;font-family:var(--body);-webki
 
 #app.lost #live{opacity:.5}
 
+/* ---------- ad playing: Skip ad ---------- */
+#adBox{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;border:2px solid #ffd21f;padding:10px 14px}
+#adTitle{font-weight:800;font-size:clamp(15px,4.6vw,20px);color:#ffd21f;letter-spacing:.02em}
+#skipBtn{width:100%;min-height:64px;border:0;border-radius:14px;background:#ffd21f;color:#111;font:800 clamp(22px,7vw,32px) var(--body);cursor:pointer}
+#skipBtn:active{transform:scale(.98)}
+#skipBtn:disabled{opacity:.55;cursor:default}
+#adHelp{font-size:13px;color:#cdd5e4;font-weight:600}
+
 /* ---------- waiting view ---------- */
 #wait{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px;padding:0 10px}
 #waitMsg{font-family:var(--disp);font-weight:900;text-transform:uppercase;font-size:min(14vw,9dvh);line-height:1}
@@ -122,6 +130,11 @@ html,body{margin:0;height:100%;background:#0b0e14;font-family:var(--body);-webki
   </header>
 
   <section id="live" hidden>
+    <div class="card" id="adBox" hidden>
+      <div id="adTitle">Ad playing \u2014 colors on hold</div>
+      <button id="skipBtn" type="button">Skip ad</button>
+      <div id="adHelp"></div>
+    </div>
     <div class="card" id="wtype"></div>
 
     <div id="zone">
@@ -288,6 +301,7 @@ function ingest(j,oneWay,tRecv){
   state.exists = true;
   if(j.plan){ state.plan = j.plan; state.v = j.v; state.pathKey = ''; }
   const st = j.st || {}; state.st = st;
+  state.helperAge = (j.helper_age==null) ? null : +j.helper_age; state.helperAt = tRecv;
   state.age = Math.max(0,+j.age||0);
   const est = (+st.pos||0) + (st.playing ? state.age + oneWay : 0);
   applyBase(st.cur|0,est,!!st.playing,tRecv);
@@ -384,8 +398,18 @@ function renderLive(now){
   $('#dot').dataset.s = link.stale ? 'stale' : 'ok';
   setText('status', lost ? 'Connection lost \u2014 times may be off' : (link.stale ? (link.beatLate && !state.err ? 'Laptop not responding\u2026' : 'Reconnecting\u2026') : ''));
   setText('songNo','Song '+v.songNo+' of '+v.songCount);
-  $('#paused').hidden = !!b.playing;
+  const adOn = !!(state.st && state.st.ad);
+  setText('paused', adOn ? 'Ad playing' : 'Paused');
+  $('#paused').hidden = !!b.playing && !adOn;
   app.classList.toggle('paused',!b.playing);
+  $('#adBox').hidden = !adOn;
+  if(adOn){
+    const helperOk = state.helperAge!=null && (state.helperAge + (now-state.helperAt)/1000) < 15;
+    setText('adHelp', helperOk ? 'Tap when the Skip button shows on the screen.' : 'The click helper isn\u2019t running on the class computer.');
+    const busy = now < skipBusyUntil;
+    $('#skipBtn').disabled = busy;
+    if(!busy) setText('skipBtn','Skip ad');
+  }
 
   // Whole screen takes the zone's color, like the ride panel.
   const s = v.seg;
@@ -439,6 +463,24 @@ function renderLive(now){
   else { up.classList.add('none'); setText('upK','Up next'); setText('upTitle','Last song of the class'); setText('upType',''); }
 }
 
+let skipBusyUntil = 0;
+async function sendSkip(){
+  if(!state.code || performance.now() < skipBusyUntil) return;
+  skipBusyUntil = performance.now() + 3500;
+  setText('skipBtn','Sent\u2026');
+  try{
+    const r = await fetch(SUPA_URL+'/rest/v1/rpc/spin_live_skip',{
+      method:'POST', cache:'no-store',
+      headers:{'Content-Type':'application/json',apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY},
+      body:JSON.stringify({p_code:state.code})
+    });
+    if(!r.ok) throw new Error('http '+r.status);
+    const j = await r.json();
+    if(j && j.ok===false && j.why==='no ad') setText('skipBtn','No ad right now');
+  }catch(e){ skipBusyUntil = 0; setText('skipBtn','Couldn\u2019t send \u2014 tap again'); }
+}
+$('#skipBtn').addEventListener('click',sendSkip);
+
 function render(){
   const now = performance.now();
   const st = state.st;
@@ -489,7 +531,7 @@ render();
 setInterval(render,100);
 
 // Test hooks (harmless in production).
-window.__teacher = {computeView,fmt,fmtDown,state,render,ingest,applyBase,poll,pathHTML,describe};
+window.__teacher = {sendSkip,computeView,fmt,fmtDown,state,render,ingest,applyBase,poll,pathHTML,describe};
 })();
 </script>
 </body>
