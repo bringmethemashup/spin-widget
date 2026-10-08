@@ -1044,6 +1044,9 @@ const STYLES = {interval:'Intervals', timetrial:'Time trial', race:'Race', pyram
 function styleLabel(o){
   if(!o) return '';
   if(o.style==='custom'){
+    // Ian (2026-10-08): a song he set to Warm up must stay a Warm up while he edits its bar — a
+    // warm up is usually one or two low colors, which the shape-reader would call a "Time trial".
+    if(o.customBase==='warmup') return STYLES.warmup;
     const k = inferStyleKey(o.customSegs) || (o.customBase && STYLES[o.customBase] ? o.customBase : null);
     return k ? STYLES[k] : 'Custom';
   }
@@ -2839,7 +2842,7 @@ function trackHTML(t,i){
   const msTicks = ms.map(m=>`<b class="mtick" style="left:${Math.min(99.5,m.frac*100).toFixed(2)}%" title="${m.min} min into the class"></b>`).join('');
   // The intensity label follows the song's ACTUAL effort (the same 1-5 score as the pips), not the
   // goal it was planned with — so a song changed to a cool down, or recolored harder, reads right.
-  const goal = t.plan.style==='recover' ? '' : (['','Cool down','Endurance','Balanced','High intensity','High intensity'][e.level]||'');
+  const goal = t.plan.style==='recover' ? '' : (['','Low effort','Endurance','Balanced','High intensity','High intensity'][e.level]||'');
   // show the interval split, since the auto-planner now varies it song to song
   const iv = t.plan.style==='interval' && t.opts.workSec
     ? `<span title="Work / recover, in seconds">${t.opts.workSec}s on &middot; ${t.opts.restSec}s off</span>` : '';
